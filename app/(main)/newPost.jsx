@@ -19,8 +19,8 @@ const NewPost = () => {
   const bodyRef = useRef("");
   const editorRef = useRef(null);
   const router = useRouter();
-  const {loading, setLoading} = useState(false);
-  const {file, setFile} = useState(file);
+  const [loading, setLoading] = useState(false);
+  const [file, setFile] = useState(file);
 
   const onPick = async (isImage) => {
     
@@ -80,7 +80,7 @@ const NewPost = () => {
     <ScreenWrapper bg="white">
       <View style={styles.container}>
         <Header title="Create Post" />
-        <ScrollView contentContainerstyle={{gap:20}}>
+        <ScrollView contentContainerStyle={{gap:20}}>
           <View style = {styles.header}>
             <Avatar
               uri={user?.image}
@@ -99,7 +99,7 @@ const NewPost = () => {
             </View>
           </View>
 
-          <View style-={styles.textEditor}>
+          <View style={styles.textEditor}>
             <RichTextEditor editorRef={editorRef} onChange= {body => bodyRef.current = body}/>
           </View>
 
