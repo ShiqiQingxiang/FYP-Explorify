@@ -14,7 +14,7 @@ const Home = () => {
   const {user, setAuth} = useAuth();
   const router = useRouter();
 
-  console.log('user: ', user);
+  // console.log('user: ', user);
 
   // const onLogout = async () => {
   //   // setAuth(null);
@@ -30,7 +30,7 @@ const Home = () => {
         <View style={styles.header}>
           <Text style={styles.title}>Explorify</Text>
           <View style={styles.icons}>
-            <Pressable onPress={() => router.push('notifications')}>
+            <Pressable onPress={() => router.push('map')}>
               <Icon name="home" size={hp(3.2)} strokeWidth={2} color={theme.colors.text}/>
             </Pressable>
             <Pressable onPress={() => router.push('notifications')}>
@@ -48,6 +48,36 @@ const Home = () => {
               />
             </Pressable>
           </View>
+        </View>
+        
+        {/* 这里放置主要内容 */}
+        <View style={{flex: 1}}>
+          {/* 主页内容放在这里 */}
+        </View>
+        
+        {/* 底部导航栏 */}
+        <View style={styles.bottomNav}>
+          <Pressable style={styles.navItem} onPress={() => router.push('home')}>
+            <Icon name="home" size={hp(3)} color={theme.colors.primary} />
+          </Pressable>
+          
+          <Pressable style={styles.navItem} onPress={() => router.push('search')}>
+            <Icon name="search" size={hp(3)} color={theme.colors.text} />
+          </Pressable>
+          
+          <Pressable style={styles.navItem} onPress={() => router.push('map')}>
+            <View style={styles.addButton}>
+              <Icon name="plus" size={hp(3)} color="white" />
+            </View>
+          </Pressable>
+          
+          <Pressable style={styles.navItem} onPress={() => router.push('chat')}>
+            <Icon name="mail" size={hp(3)} color={theme.colors.text} />
+          </Pressable>
+          
+          <Pressable style={styles.navItem} onPress={() => router.push('profile')}>
+            <Icon name="user" size={hp(3)} color={theme.colors.text} />
+          </Pressable>
         </View>
       </View>
       {/* <Button title="logout" onPress={onLogout} /> */}
@@ -119,5 +149,34 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginHorizontal: wp(4),
     backgroundColor: 'gray',
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    height: hp(8),
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.gray,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingBottom: hp(1),
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  navText: {
+    fontSize: hp(1.5),
+    color: theme.colors.text,
+    marginTop: 4,
+  },
+  addButton: {
+    backgroundColor: theme.colors.primary,
+    width: hp(6),
+    height: hp(6),
+    borderRadius: hp(3),
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: hp(1),
   },
 })
