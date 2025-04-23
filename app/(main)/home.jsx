@@ -1,5 +1,5 @@
-import { Alert, Button, Pressable, StyleSheet, Text, View } from 'react-native'
-import React from 'react'
+import { Alert, ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import React, { useEffect, useState } from 'react'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -8,21 +8,51 @@ import { theme } from '../../constants/theme'
 import Icon from '../../assets/icons'
 import { useRouter } from 'expo-router'
 import Avatar from '../../components/Avatar'
+import PostItem from '../../components/PostItem'
+import { getAllPosts } from '../../services/postService'
 
 const Home = () => {
 
   const {user, setAuth} = useAuth();
   const router = useRouter();
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // console.log('user: ', user);
+  const fetchPosts = async () => {
+    setLoading(true);
+    const res = await getAllPosts();
+    setLoading(false);
+    
+    if (res.success) {
+      setPosts(res.data);
+    } else {
+      Alert.alert('Error', res.msg);
+    }
+  };
 
-  // const onLogout = async () => {
-  //   // setAuth(null);
-  //   const { error } = await supabase.auth.signOut();
-  //   if(error) {
-  //     Alert.alert('Sign out', "Error signing out!")
-  //   }
-  // }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchPosts();
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const renderItem = ({ item }) => <PostItem post={item} onRefresh={onRefresh} />;
+
+  const renderEmpty = () => (
+    <View style={styles.emptyContainer}>
+      {loading ? (
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      ) : (
+        <Text style={styles.noPosts}>No posts yet</Text>
+      )}
+    </View>
+  );
+
   return (
     <ScreenWrapper bg="white">
       <View style={styles.container}>
@@ -30,10 +60,10 @@ const Home = () => {
         <View style={styles.header}>
           <Text style={styles.title}>Explorify</Text>
           <View style={styles.icons}>
-            <Pressable onPress={() => router.push('map')}>
-              <Icon name="home" size={hp(3.2)} strokeWidth={2} color={theme.colors.text}/>
+            <Pressable onPress={() => router.push('myPosts')}>
+              <Icon name="user" size={hp(3.2)} strokeWidth={2} color={theme.colors.text}/>
             </Pressable>
-            <Pressable onPress={() => router.push('notifications')}>
+            <Pressable onPress={() => router.push('favouritePosts')}>
               <Icon name="heart" size={hp(3.2)} strokeWidth={2} color={theme.colors.text}/>
             </Pressable>
             <Pressable onPress={() => router.push('newPost')}>
@@ -50,12 +80,24 @@ const Home = () => {
           </View>
         </View>
         
-        {/* 这里放置主要内容 */}
-        <View style={{flex: 1}}>
-          {/* 主页内容放在这里 */}
-        </View>
+        {/* Posts list */}
+        <FlatList
+          data={posts}
+          renderItem={renderItem}
+          keyExtractor={item => item.id.toString()}
+          contentContainerStyle={styles.listStyle}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={renderEmpty}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+            />
+          }
+        />
         
-        {/* 底部导航栏 */}
+        {/* Bottom navigation */}
         <View style={styles.bottomNav}>
           <Pressable style={styles.navItem} onPress={() => router.push('home')}>
             <Icon name="home" size={hp(3)} color={theme.colors.primary} />
@@ -67,7 +109,7 @@ const Home = () => {
           
           <Pressable style={styles.navItem} onPress={() => router.push('map')}>
             <View style={styles.addButton}>
-              <Icon name="plus" size={hp(3)} color="white" />
+              <Icon name="navigation" size={hp(3)} color="white" />
             </View>
           </Pressable>
           
@@ -80,7 +122,6 @@ const Home = () => {
           </Pressable>
         </View>
       </View>
-      {/* <Button title="logout" onPress={onLogout} /> */}
     </ScreenWrapper>
   )
 }
@@ -125,6 +166,12 @@ const styles = StyleSheet.create({
     fontSize: hp(2),
     textAlign: 'center',
     color: theme.colors.text,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: hp(30),
   },
   pill:{
     position: 'absolute',

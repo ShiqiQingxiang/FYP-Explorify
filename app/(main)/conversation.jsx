@@ -15,7 +15,7 @@ const Conversation = () => {
   const [newMessage, setNewMessage] = useState('')
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [contactName, setContactName] = useState(params.name || '对话')
+  const [contactName, setContactName] = useState(params.name || 'Chat')
   const flatListRef = useRef(null)
   const [userCache, setUserCache] = useState({})
   const [userName, setUserName] = useState(params.name || '')
@@ -36,7 +36,7 @@ const Conversation = () => {
   const userId = route.user_id;
   const userEmail = route.email; // 接收email参数
   
-  console.log('路由参数:', {
+  console.log('Route params:', {
     id: conversationId,
     user_id: userId,
     email: userEmail,
@@ -45,19 +45,19 @@ const Conversation = () => {
 
   // 组件挂载时，打印关键信息用于调试
   useEffect(() => {
-    console.log('Conversation组件挂载，contactName:', contactName);
-    console.log('Conversation组件挂载，userEmail:', userEmail);
+    console.log('Conversation component mounted, contactName:', contactName);
+    console.log('Conversation component mounted, userEmail:', userEmail);
   }, []);
 
   // 当contactName更新时记录
   useEffect(() => {
-    console.log('contactName已更新为:', contactName);
+    console.log('contactName updated to:', contactName);
   }, [contactName]);
 
   // 获取用户名称函数，如果无法获取用户名则使用邮箱
   const getUserName = async (userId, email) => {
     try {
-      console.log('使用getUserName获取用户名 - userId:', userId, 'email:', email);
+      console.log('Using getUserName to get username - userId:', userId, 'email:', email);
       
       // 存储最终使用的名称来源，用于调试
       let nameSource = '';
@@ -73,25 +73,25 @@ const Conversation = () => {
         if (!error && data) {
           // 优先使用用户真实姓名
           if (data.name) {
-            nameSource = 'users表的name字段';
-            console.log('从users表获取到用户名:', data.name, '[nameSource]:', nameSource);
+            nameSource = 'users table name field';
+            console.log('Got username from users table:', data.name, '[nameSource]:', nameSource);
             return { name: data.name, source: nameSource };
           }
           // 其次使用用户邮箱
           else if (data.email) {
-            nameSource = 'users表的email字段';
-            console.log('从users表获取到邮箱:', data.email, '[nameSource]:', nameSource);
+            nameSource = 'users table email field';
+            console.log('Got email from users table:', data.email, '[nameSource]:', nameSource);
             return { name: data.email, source: nameSource };
           }
         } else {
-          console.log('从users表获取用户信息失败:', error);
+          console.log('Failed to get user info from users table:', error);
         }
       }
       
       // 如果提供了邮箱作为参数，直接使用
       if (email) {
-        nameSource = '函数参数中的email';
-        console.log('使用传入的邮箱作为用户名:', email, '[nameSource]:', nameSource);
+        nameSource = 'email parameter';
+        console.log('Using provided email as username:', email, '[nameSource]:', nameSource);
         return { name: email, source: nameSource };
       }
       
@@ -103,14 +103,14 @@ const Conversation = () => {
         if (cachedUser) {
           // 优先使用缓存的名称
           if (cachedUser.name && cachedUser.name !== cachedUser.email) {
-            nameSource = '缓存中的name字段';
-            console.log('从缓存使用用户名:', cachedUser.name, '[nameSource]:', nameSource);
+            nameSource = 'cache name field';
+            console.log('Using username from cache:', cachedUser.name, '[nameSource]:', nameSource);
             return { name: cachedUser.name, source: nameSource };
           }
           // 其次使用缓存的邮箱
           else if (cachedUser.email) {
-            nameSource = '缓存中的email字段';
-            console.log('从缓存使用邮箱:', cachedUser.email, '[nameSource]:', nameSource);
+            nameSource = 'cache email field';
+            console.log('Using email from cache:', cachedUser.email, '[nameSource]:', nameSource);
             return { name: cachedUser.email, source: nameSource };
           }
         }
@@ -122,16 +122,16 @@ const Conversation = () => {
         // 优先使用名称
         const lastAddedName = await AsyncStorage.getItem('lastAddedUserName');
         if (lastAddedName) {
-          nameSource = 'AsyncStorage中的lastAddedUserName';
-          console.log('使用上次添加的用户名称:', lastAddedName, '[nameSource]:', nameSource);
+          nameSource = 'AsyncStorage lastAddedUserName';
+          console.log('Using last added username:', lastAddedName, '[nameSource]:', nameSource);
           return { name: lastAddedName, source: nameSource };
         }
         
         // 其次使用邮箱
         const lastAddedEmail = await AsyncStorage.getItem('lastAddedUserEmail');
         if (lastAddedEmail) {
-          nameSource = 'AsyncStorage中的lastAddedUserEmail';
-          console.log('使用上次添加的用户邮箱:', lastAddedEmail, '[nameSource]:', nameSource);
+          nameSource = 'AsyncStorage lastAddedUserEmail';
+          console.log('Using last added user email:', lastAddedEmail, '[nameSource]:', nameSource);
           return { name: lastAddedEmail, source: nameSource };
         }
       }
@@ -152,47 +152,47 @@ const Conversation = () => {
                 const content = JSON.parse(msg.content);
                 if (content.type === 'system') {
                   if (content.participant_names && content.participant_names[userId]) {
-                    nameSource = '系统消息中的participant_names';
-                    console.log('从系统消息获取用户名:', content.participant_names[userId], '[nameSource]:', nameSource);
+                    nameSource = 'system message participant_names';
+                    console.log('Got username from system message:', content.participant_names[userId], '[nameSource]:', nameSource);
                     return { name: content.participant_names[userId], source: nameSource };
                   } else if (content.participant_emails && content.participant_emails[userId]) {
-                    nameSource = '系统消息中的participant_emails';
-                    console.log('从系统消息获取邮箱:', content.participant_emails[userId], '[nameSource]:', nameSource);
+                    nameSource = 'system message participant_emails';
+                    console.log('Got email from system message:', content.participant_emails[userId], '[nameSource]:', nameSource);
                     return { name: content.participant_emails[userId], source: nameSource };
                   }
                 }
               } catch (e) {
-                // 不是有效的JSON，继续
+                // Not valid JSON, continue
               }
             }
           }
         } catch (e) {
-          console.error('从系统消息获取用户信息错误:', e);
+          console.error('Error getting user info from system messages:', e);
         }
       }
       
       // 所有方法都失败时，返回默认值
-      nameSource = '默认值';
-      return { name: userId ? `用户 ${userId.substring(0, 8)}` : '未知用户', source: nameSource };
+      nameSource = 'default value';
+      return { name: userId ? `User ${userId.substring(0, 8)}` : 'Unknown User', source: nameSource };
     } catch (error) {
-      console.error('获取用户名称错误:', error);
-      return { name: email || userId?.substring(0, 8) || '未知用户', source: '错误回退' };
+      console.error('Error getting username:', error);
+      return { name: email || userId?.substring(0, 8) || 'Unknown User', source: 'error fallback' };
     }
   };
 
   useEffect(() => {
     // 首先检查路由参数中是否有email
     if (userEmail) {
-      console.log('从路由参数获取到联系人邮箱:', userEmail);
+      console.log('Got contact email from route params:', userEmail);
       
       // 先尝试获取真实姓名
       const loadUserName = async () => {
         try {
           const { name, source } = await getUserName(userId, userEmail);
           setContactName(name);
-          console.log('设置联系人名称:', name, '[来源]:', source);
+          console.log('Set contact name:', name, '[source]:', source);
         } catch (error) {
-          console.error('获取联系人姓名失败:', error);
+          console.error('Failed to get contact name:', error);
           setContactName(userEmail);
         }
       };
@@ -225,7 +225,7 @@ const Conversation = () => {
           // 保存更新后的缓存
           await AsyncStorage.setItem('searchResultsCache', JSON.stringify(cachedUsers));
         } catch (error) {
-          console.error('缓存用户信息错误:', error);
+          console.error('Error caching user info:', error);
         }
       };
       
@@ -239,12 +239,12 @@ const Conversation = () => {
         // 调用getUserName函数获取用户名或邮箱
         const { name, source } = await getUserName(params.user_id, null);
         setContactName(name);
-        console.log('设置联系人名称:', name, '[来源]:', source);
+        console.log('Set contact name:', name, '[source]:', source);
       } catch (error) {
-        console.error('加载联系人信息错误:', error);
+        console.error('Error loading contact info:', error);
         // 如果还是没找到，使用ID的前段
         if (params.user_id) {
-          setContactName(`用户 ${params.user_id.substring(0, 8)}`);
+          setContactName(`User ${params.user_id.substring(0, 8)}`);
         }
       }
     };
@@ -269,11 +269,11 @@ const Conversation = () => {
           if (success) {
             setMessages(data)
           } else {
-            console.error('获取消息失败:', msg)
+            console.error('Failed to get messages:', msg)
           }
         }
       } catch (error) {
-        console.error('加载用户和消息错误:', error)
+        console.error('Error loading user and messages:', error)
       } finally {
         setLoading(false)
       }
@@ -299,7 +299,7 @@ const Conversation = () => {
         }
       })
       .subscribe((status) => {
-        console.log('实时订阅状态:', status)
+        console.log('Real-time subscription status:', status)
       })
       
     return () => {
@@ -307,6 +307,31 @@ const Conversation = () => {
       messagesSubscription.unsubscribe()
     }
   }, [conversation.id])
+
+  // 监听键盘事件
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        setKeyboardVisible(true);
+        // 当键盘显示时，滚动到底部
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   // 处理用户数据缓存
   useEffect(() => {
@@ -352,10 +377,10 @@ const Conversation = () => {
           flatListRef.current?.scrollToEnd({ animated: true })
         }, 100)
       } else {
-        console.error('发送消息失败:', msg)
+        console.error('Failed to send message:', msg)
       }
     } catch (error) {
-      console.error('发送消息错误:', error)
+      console.error('Error sending message:', error)
     }
   }
 
@@ -412,13 +437,13 @@ const Conversation = () => {
     let displayDate;
     
     if (date.toDateString() === now.toDateString()) {
-      displayDate = '今天';
+      displayDate = 'Today';
     } else if (now.getDate() - date.getDate() === 1 && 
                date.getMonth() === now.getMonth() && 
                date.getFullYear() === now.getFullYear()) {
-      displayDate = '昨天';
+      displayDate = 'Yesterday';
     } else {
-      displayDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+      displayDate = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
     }
     
     return (
@@ -433,62 +458,37 @@ const Conversation = () => {
   // 删除当前对话
   const handleDeleteConversation = async () => {
     Alert.alert(
-      '删除对话',
-      `确定要删除与 ${contactName} 的对话吗？所有消息将被删除。`,
+      'Delete Conversation',
+      `Are you sure you want to delete this conversation with ${contactName}? All messages will be deleted.`,
       [
         {
-          text: '取消',
+          text: 'Cancel',
           style: 'cancel'
         },
         {
-          text: '删除',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
               const { success, msg } = await deleteConversation(conversation.id, user.id);
               
               if (success) {
-                Alert.alert('成功', '对话已删除');
+                Alert.alert('Success', 'Conversation deleted');
                 // 返回上一页
                 router.back();
               } else {
-                console.error('删除对话失败:', msg);
-                Alert.alert('错误', '删除对话失败: ' + msg);
+                console.error('Failed to delete conversation:', msg);
+                Alert.alert('Error', 'Failed to delete conversation: ' + msg);
               }
             } catch (error) {
-              console.error('删除对话错误:', error);
-              Alert.alert('错误', '删除对话失败，请重试');
+              console.error('Error deleting conversation:', error);
+              Alert.alert('Error', 'Failed to delete conversation, please try again');
             }
           }
         }
       ]
     );
   };
-
-  // 监听键盘事件
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        setKeyboardVisible(true);
-        // 当键盘显示时，滚动到底部
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
-      }
-    );
-
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-    };
-  }, []);
 
   // 如果用户未登录，显示提示信息
   if (!user) {
@@ -504,17 +504,17 @@ const Conversation = () => {
               <FontAwesome name="arrow-left" size={hp(2.5)} color={theme.colors.text} />
             </TouchableOpacity>
             <View style={styles.headerInfo}>
-              <Text style={styles.headerName}>聊天</Text>
+              <Text style={styles.headerName}>Chat</Text>
             </View>
           </View>
           <View style={styles.notLoggedInContainer}>
             <FontAwesome name="user" size={hp(10)} color={theme.colors.gray} />
-            <Text style={styles.notLoggedInText}>请先登录</Text>
+            <Text style={styles.notLoggedInText}>Please log in first</Text>
             <TouchableOpacity 
               style={styles.loginButton}
               onPress={() => router.push('profile')}
             >
-              <Text style={styles.loginButtonText}>前往登录</Text>
+              <Text style={styles.loginButtonText}>Go to Login</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -572,7 +572,7 @@ const Conversation = () => {
                 <View style={styles.startConversation}>
                   <Image source={{ uri: conversation.avatar }} style={styles.startAvatar} />
                   <Text style={styles.startTitle}>{contactName}</Text>
-                  <Text style={styles.startSubtitle}>开始与{contactName}聊天</Text>
+                  <Text style={styles.startSubtitle}>Start chatting with {contactName}</Text>
                 </View>
               ) : null
             )}
@@ -583,7 +583,7 @@ const Conversation = () => {
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
-                placeholder="输入消息..."
+                placeholder="Type a message..."
                 value={newMessage}
                 onChangeText={setNewMessage}
                 multiline

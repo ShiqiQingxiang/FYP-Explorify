@@ -1118,7 +1118,7 @@ export const getOrCreateConversation = async (userId, otherUserId, otherUserEmai
 const sendWelcomeMessage = async (conversationId, userId) => {
   try {
     // 简单的欢迎消息，不包含调试信息或数据库表内容
-    const welcomeMessage = "欢迎开始新的对话！";
+    const welcomeMessage = "Welcome to the new conversation!";
     
     const { error } = await supabase
       .from('messages')

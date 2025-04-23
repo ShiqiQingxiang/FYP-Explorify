@@ -1,5 +1,5 @@
-import { Alert, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import React, { useEffect, useState } from 'react'
+﻿import { Alert, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import React from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRouter } from 'expo-router'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -45,34 +45,6 @@ const Profile = () => {
 }
 
 const UserHeader = ({user, router, handleLogout}) => {
-  const [totalPoints, setTotalPoints] = useState(0);
-
-  useEffect(() => {
-    const fetchUserPoints = async () => {
-      if (user && user.id) {
-        try {
-          const { data, error } = await supabase
-            .from('user_tasks')
-            .select('points_earned')
-            .eq('user_id', user.id);
-          
-          if (error) {
-            console.error('获取用户积分失败:', error);
-            return;
-          }
-          
-          // 计算总积分
-          const points = data.reduce((sum, task) => sum + (task.points_earned || 0), 0);
-          setTotalPoints(points);
-        } catch (err) {
-          console.error('获取积分异常:', err);
-        }
-      }
-    };
-
-    fetchUserPoints();
-  }, [user]);
-
   return (
     <View style={{flex: 1, backgroundColor: 'white', paddingHorizontal: wp(4)}}>
       <View>
@@ -98,12 +70,6 @@ const UserHeader = ({user, router, handleLogout}) => {
             <View style={{alignItems: 'center', gap: 4}}>
               <Text style={styles.userName}>{user && user.name}</Text>
               <Text style={styles.infoText}>{user && user.address}</Text>
-            </View>
-            
-            {/* User points */}
-            <View style={styles.pointsContainer}>
-              <Icon name="award" size={24} color={theme.colors.primary} />
-              <Text style={styles.pointsText}>{totalPoints} 积分</Text>
             </View>
             
             {/* User email phone bio */}
@@ -201,20 +167,5 @@ const styles = StyleSheet.create({
     fontSize: hp(2),
     color: theme.colors.text,
     textAlign: 'center',
-  },
-  pointsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.primary + '10',
-    paddingHorizontal: wp(4),
-    paddingVertical: hp(1),
-    borderRadius: theme.radius.lg,
-    gap: 8,
-    marginVertical: hp(1),
-  },
-  pointsText: {
-    fontSize: hp(2),
-    fontWeight: '600',
-    color: theme.colors.primary,
   },
 })

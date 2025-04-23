@@ -9,7 +9,7 @@ import Header from '../../components/Header'
 import { supabase } from '../../lib/supabase'
 import { getConversations, searchUsers, getOrCreateConversation, deleteConversation } from '../../services/chatService'
 
-// 完全独立的搜索组件
+// Independent search component
 const SearchScreen = ({ onBack, onSelectUser, currentUserId }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -17,13 +17,13 @@ const SearchScreen = ({ onBack, onSelectUser, currentUserId }) => {
   const inputRef = useRef(null);
   const timeoutRef = useRef(null);
 
-  // 组件挂载时聚焦输入框
+  // Focus input field on component mount
   useEffect(() => {
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
 
-    // 清理函数
+    // Cleanup function
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -34,7 +34,7 @@ const SearchScreen = ({ onBack, onSelectUser, currentUserId }) => {
   const handleSearch = (text) => {
     setQuery(text);
     
-    // 清除之前的计时器
+    // Clear previous timer
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
@@ -42,18 +42,18 @@ const SearchScreen = ({ onBack, onSelectUser, currentUserId }) => {
     if (text.length > 0) {
       setIsSearching(true);
       
-      // 设置新的计时器，防抖
+      // Set new timer, debounce
       timeoutRef.current = setTimeout(async () => {
         try {
           const { success, data, msg } = await searchUsers(text, currentUserId);
           if (success) {
             setResults(data);
           } else {
-            console.error('搜索用户失败:', msg);
+            console.error('Failed to search users:', msg);
             setResults([]);
           }
         } catch (error) {
-          console.error('搜索用户错误:', error);
+          console.error('Error searching users:', error);
         } finally {
           setIsSearching(false);
         }
@@ -74,7 +74,7 @@ const SearchScreen = ({ onBack, onSelectUser, currentUserId }) => {
         style={styles.addButton}
         onPress={() => onSelectUser(item.id, item.email)}
       >
-        <Text style={styles.addButtonText}>添加</Text>
+        <Text style={styles.addButtonText}>Add</Text>
       </TouchableOpacity>
     </View>
   );
@@ -88,7 +88,7 @@ const SearchScreen = ({ onBack, onSelectUser, currentUserId }) => {
         <TextInput
           ref={inputRef}
           style={styles.searchInput}
-          placeholder="搜索用户邮箱..."
+          placeholder="Search user email..."
           value={query}
           onChangeText={handleSearch}
           clearButtonMode="while-editing"
@@ -110,9 +110,9 @@ const SearchScreen = ({ onBack, onSelectUser, currentUserId }) => {
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             query.length > 0 ? (
-              <Text style={styles.emptyMessage}>未找到相关用户</Text>
+              <Text style={styles.emptyMessage}>No users found</Text>
             ) : (
-              <Text style={styles.searchPrompt}>请输入用户邮箱进行搜索</Text>
+              <Text style={styles.searchPrompt}>Enter an email to search for users</Text>
             )
           }
         />
@@ -121,7 +121,7 @@ const SearchScreen = ({ onBack, onSelectUser, currentUserId }) => {
   );
 };
 
-// 主聊天组件
+// Main chat component
 const Chat = () => {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -130,31 +130,31 @@ const Chat = () => {
   const [showSearch, setShowSearch] = useState(false)
   
   useEffect(() => {
-    // 检查用户登录状态并加载对话
+    // Check user login status and load conversations
     const loadUserAndConversations = async () => {
       try {
         setLoading(true)
         
-        // 获取当前登录用户
+        // Get current logged in user
         const { data: { user } } = await supabase.auth.getUser()
         setUser(user)
         
         if (user) {
-          // 获取用户的对话列表
+          // Get user's conversation list
           const { success, data, msg } = await getConversations(user.id)
           
           if (success) {
             setConversations(data)
           } else {
-            console.error('获取对话列表失败:', msg)
-            Alert.alert('错误', '获取聊天列表失败，请重试')
+            console.error('Failed to get conversation list:', msg)
+            Alert.alert('Error', 'Failed to get chat list, please try again')
           }
         } else {
-          // 使用模拟数据用于演示
+          // Use mock data for demo
           setConversations([])
         }
       } catch (error) {
-        console.error('加载用户和对话错误:', error)
+        console.error('Error loading user and conversations:', error)
       } finally {
         setLoading(false)
       }
@@ -162,7 +162,7 @@ const Chat = () => {
 
     loadUserAndConversations()
     
-    // 设置对话和消息的实时订阅
+    // Set up real-time subscriptions for conversations and messages
     const conversationsSubscription = supabase
       .channel('conversations-changes')
       .on('postgres_changes', {
@@ -170,7 +170,7 @@ const Chat = () => {
         schema: 'public',
         table: 'conversations'
       }, payload => {
-        // 当对话更新时重新加载对话列表
+        // Reload conversation list when conversations update
         if (user) {
           getConversations(user.id).then(({ success, data }) => {
             if (success) setConversations(data)
@@ -178,7 +178,7 @@ const Chat = () => {
         }
       })
       .subscribe((status) => {
-        console.log('对话订阅状态:', status)
+        console.log('Conversation subscription status:', status)
       })
       
     const messagesSubscription = supabase
@@ -188,7 +188,7 @@ const Chat = () => {
         schema: 'public',
         table: 'messages'
       }, payload => {
-        // 当有新消息时刷新对话列表
+        // Refresh conversation list when new messages arrive
         if (user) {
           getConversations(user.id).then(({ success, data }) => {
             if (success) setConversations(data)
@@ -196,47 +196,47 @@ const Chat = () => {
         }
       })
       .subscribe((status) => {
-        console.log('消息订阅状态:', status)
+        console.log('Message subscription status:', status)
       })
       
     return () => {
-      // 清理订阅
+      // Cleanup subscriptions
       conversationsSubscription.unsubscribe()
       messagesSubscription.unsubscribe()
     }
   }, [])
 
-  // 添加好友 (创建对话)
+  // Add friend (create conversation)
   const addFriend = async (friendId, friendEmail) => {
     if (!user) {
-      Alert.alert('请先登录', '您需要登录才能添加好友')
+      Alert.alert('Please log in', 'You need to log in to add friends')
       return
     }
     
     if (friendId === user.id) {
-      Alert.alert('提示', '不能添加自己为好友')
+      Alert.alert('Note', 'You cannot add yourself as a friend')
       return
     }
     
     try {
-      // 先检查是否已经有与该用户的对话
+      // Check if conversation with this user already exists
       let existingConversations = [...conversations]
       const existingConversation = existingConversations.find(
         conv => conv.user && conv.user.id === friendId
       )
       
       if (existingConversation) {
-        // 已存在对话，提示用户并直接打开
+        // Conversation exists, notify user and offer to open it
         Alert.alert(
-          '已添加',
-          '该用户已在您的聊天列表中',
+          'Already Added',
+          'This user is already in your chat list',
           [
             {
-              text: '取消',
+              text: 'Cancel',
               style: 'cancel'
             },
             {
-              text: '查看聊天',
+              text: 'View Chat',
               onPress: () => openChat(existingConversation)
             }
           ]
@@ -244,68 +244,68 @@ const Chat = () => {
         return
       }
       
-      // 创建或获取与该用户的对话
+      // Create or get conversation with this user
       const { success, data, msg } = await getOrCreateConversation(user.id, friendId, friendEmail);
       
       if (success) {
-        // 成功创建或获取对话后刷新对话列表
+        // Refresh conversation list after successful creation
         const conversationsResult = await getConversations(user.id);
         if (conversationsResult.success) {
           setConversations(conversationsResult.data);
         }
         
-        // 关闭搜索视图
+        // Close search view
         setShowSearch(false);
         
-        Alert.alert('成功', '已添加到您的聊天列表')
+        Alert.alert('Success', 'Added to your chat list')
       } else {
-        console.error('创建对话失败:', msg)
-        Alert.alert('错误', '添加好友失败，请重试。原因：' + msg)
+        console.error('Failed to create conversation:', msg)
+        Alert.alert('Error', 'Failed to add friend. Reason: ' + msg)
       }
     } catch (error) {
-      console.error('添加好友错误:', error)
-      Alert.alert('错误', '添加好友失败，请重试')
+      console.error('Error adding friend:', error)
+      Alert.alert('Error', 'Failed to add friend, please try again')
     }
   }
 
-  // 打开与特定用户的对话
+  // Open conversation with a specific user
   const openChat = async (conversation) => {
     try {
-      // 检查是否有缓存的用户信息
+      // Check for cached user info
       let email = '';
-      // 使用正确的参与者ID字段
+      // Use correct participant ID field
       let participantId = conversation.user?.id || '';
       
-      console.log('打开对话 - 参与者ID:', participantId);
-      console.log('打开对话 - 对话数据:', JSON.stringify(conversation));
+      console.log('Opening conversation - Participant ID:', participantId);
+      console.log('Opening conversation - Conversation data:', JSON.stringify(conversation));
       
-      // 从缓存中获取用户邮箱
+      // Get user email from cache
       const cachedDataJson = await AsyncStorage.getItem('searchResultsCache');
       if (cachedDataJson) {
         const cachedUsers = JSON.parse(cachedDataJson);
         const cachedUser = cachedUsers.find(u => u.id === participantId);
         if (cachedUser && cachedUser.email) {
           email = cachedUser.email;
-          console.log('从缓存获取到用户邮箱:', email);
+          console.log('Got user email from cache:', email);
         }
       }
       
-      // 如果缓存中没有，尝试从AsyncStorage中获取
+      // If not in cache, try AsyncStorage
       if (!email && participantId) {
         const lastAddedId = await AsyncStorage.getItem('lastAddedUserId');
         if (lastAddedId === participantId) {
           const lastAddedEmail = await AsyncStorage.getItem('lastAddedUserEmail');
           if (lastAddedEmail) {
             email = lastAddedEmail;
-            console.log('从AsyncStorage获取到用户邮箱:', email);
+            console.log('Got user email from AsyncStorage:', email);
           }
         }
       }
       
-      // 如果还是没有找到邮箱，尝试从数据库中获取
+      // If still not found, try database
       if (!email && participantId) {
         try {
-          // 从users表而不是profiles表获取邮箱
+          // Get email from users table instead of profiles
           const { data, error } = await supabase
             .from('users')
             .select('email')
@@ -314,27 +314,27 @@ const Chat = () => {
             
           if (!error && data && data.email) {
             email = data.email;
-            console.log('从数据库获取到用户邮箱:', email);
+            console.log('Got user email from database:', email);
             
-            // 将获取到的邮箱信息缓存到AsyncStorage
+            // Cache the email info to AsyncStorage
             if (email) {
-              // 更新lastAddedUser信息
+              // Update lastAddedUser info
               await AsyncStorage.setItem('lastAddedUserId', participantId);
               await AsyncStorage.setItem('lastAddedUserEmail', email);
               
-              // 更新缓存的搜索结果
+              // Update cached search results
               if (cachedDataJson) {
                 let cachedUsers = JSON.parse(cachedDataJson);
                 const existingUserIndex = cachedUsers.findIndex(u => u.id === participantId);
                 
                 if (existingUserIndex !== -1) {
-                  // 更新现有用户信息
+                  // Update existing user info
                   cachedUsers[existingUserIndex] = {
                     ...cachedUsers[existingUserIndex],
                     email: email
                   };
                 } else {
-                  // 添加新用户
+                  // Add new user
                   cachedUsers.push({
                     id: participantId,
                     email: email,
@@ -344,7 +344,7 @@ const Chat = () => {
                 
                 await AsyncStorage.setItem('searchResultsCache', JSON.stringify(cachedUsers));
               } else {
-                // 创建新的缓存
+                // Create new cache
                 const newCache = [{
                   id: participantId,
                   email: email,
@@ -355,8 +355,8 @@ const Chat = () => {
             }
           }
         } catch (dbError) {
-          console.error('从数据库获取用户邮箱错误:', dbError);
-          // 尝试从profiles表作为备选
+          console.error('Error getting user email from database:', dbError);
+          // Try profiles table as fallback
           try {
             const { data, error } = await supabase
               .from('profiles')
@@ -366,18 +366,18 @@ const Chat = () => {
                 
             if (!error && data && data.email) {
               email = data.email;
-              console.log('从profiles表获取到用户邮箱:', email);
+              console.log('Got user email from profiles table:', email);
               await AsyncStorage.setItem('lastAddedUserId', participantId);
               await AsyncStorage.setItem('lastAddedUserEmail', email);
             }
           } catch (profileError) {
-            console.error('从profiles表获取邮箱错误:', profileError);
+            console.error('Error getting email from profiles table:', profileError);
           }
         }
       }
 
-      // 导航到对话页面，传递必要参数
-      console.log('跳转到对话页面，参数:', {
+      // Navigate to conversation page, passing necessary parameters
+      console.log('Navigating to conversation page, params:', {
         id: conversation.id,
         user_id: participantId,
         email: email,
@@ -389,49 +389,49 @@ const Chat = () => {
         params: {
           id: conversation.id,
           user_id: participantId,
-          email: email, // 确保email参数正确传递
+          email: email,
           avatar: conversation.user?.avatar || 'https://randomuser.me/api/portraits/lego/1.jpg',
         }
       });
     } catch (error) {
-      console.error('打开对话错误:', error);
-      Alert.alert('错误', '无法打开对话');
+      console.error('Error opening conversation:', error);
+      Alert.alert('Error', 'Cannot open conversation');
     }
   };
 
-  // 格式化时间
+  // Format time
   const formatTime = (isoString) => {
     const date = new Date(isoString)
     const now = new Date()
     
-    // 今天的消息只显示时间
+    // For today's messages, just show time
     if (date.toDateString() === now.toDateString()) {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     } 
-    // 昨天的消息显示"昨天"
+    // For yesterday's messages, show "Yesterday"
     else if (now.getDate() - date.getDate() === 1 && 
              date.getMonth() === now.getMonth() && 
              date.getFullYear() === now.getFullYear()) {
-      return '昨天'
+      return 'Yesterday'
     } 
-    // 其他显示日期
+    // For other dates, show date
     else {
-      return `${date.getMonth() + 1}月${date.getDate()}日`
+      return `${date.getMonth() + 1}-${date.getDate()}`
     }
   }
 
-  // 删除对话
+  // Delete conversation
   const confirmDeleteConversation = (conversation) => {
     Alert.alert(
-      '删除对话',
-      `确定要删除与 ${conversation.user.name} 的对话吗？所有消息将被删除。`,
+      'Delete Conversation',
+      `Are you sure you want to delete this conversation with ${conversation.user.name}? All messages will be deleted.`,
       [
         {
-          text: '取消',
+          text: 'Cancel',
           style: 'cancel'
         },
         {
-          text: '删除',
+          text: 'Delete',
           style: 'destructive',
           onPress: () => handleDeleteConversation(conversation)
         }
@@ -439,38 +439,38 @@ const Chat = () => {
     );
   };
   
-  // 处理删除对话
+  // Handle delete conversation
   const handleDeleteConversation = async (conversation) => {
     if (!user) {
-      Alert.alert('请先登录', '您需要登录才能删除对话')
+      Alert.alert('Please log in', 'You need to log in to delete conversations')
       return
     }
     
     try {
-      // 调用删除对话的API
+      // Call delete conversation API
       const { success, msg } = await deleteConversation(conversation.id, user.id);
       
       if (success) {
-        // 从列表中移除被删除的对话
+        // Remove deleted conversation from list
         setConversations(prevConversations => 
           prevConversations.filter(conv => conv.id !== conversation.id)
         );
-        Alert.alert('成功', '对话已删除');
+        Alert.alert('Success', 'Conversation deleted');
       } else {
-        console.error('删除对话失败:', msg);
-        Alert.alert('错误', '删除对话失败: ' + msg);
+        console.error('Failed to delete conversation:', msg);
+        Alert.alert('Error', 'Failed to delete conversation: ' + msg);
       }
     } catch (error) {
-      console.error('删除对话错误:', error);
-      Alert.alert('错误', '删除对话失败，请重试');
+      console.error('Error deleting conversation:', error);
+      Alert.alert('Error', 'Failed to delete conversation, please try again');
     }
   };
 
-  // 渲染对话项
+  // Render conversation item
   const renderConversationItem = ({ item }) => {
     if (!item.lastMessage) return null;
     
-    // 添加删除动作
+    // Add delete action
     const onDeletePress = () => {
       confirmDeleteConversation(item);
     };
@@ -480,8 +480,8 @@ const Chat = () => {
         <TouchableOpacity 
           style={styles.conversationItem}
           onPress={() => openChat(item)}
-          onLongPress={onDeletePress} // 添加长按删除功能
-          delayLongPress={500} // 设置长按时间为500毫秒
+          onLongPress={onDeletePress} // Add long press delete function
+          delayLongPress={500} // Set long press time to 500ms
         >
           <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
           <View style={styles.conversationContent}>
@@ -494,18 +494,18 @@ const Chat = () => {
                 styles.lastMessage, 
                 !item.lastMessage.read && !item.lastMessage.isMine && styles.unreadMessage
               ]} numberOfLines={1}>
-                {item.lastMessage.isMine ? `我: ${item.lastMessage.text}` : item.lastMessage.text}
+                {item.lastMessage.isMine ? `Me: ${item.lastMessage.text}` : item.lastMessage.text}
               </Text>
               {!item.lastMessage.read && !item.lastMessage.isMine && (
                 <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadCount}>新</Text>
+                  <Text style={styles.unreadCount}>New</Text>
                 </View>
               )}
             </View>
           </View>
         </TouchableOpacity>
         
-        {/* 删除按钮 */}
+        {/* Delete button */}
         <TouchableOpacity 
           style={styles.deleteButton}
           onPress={onDeletePress}
@@ -516,10 +516,10 @@ const Chat = () => {
     )
   }
 
-  // 主聊天列表界面
+  // Main chat list interface
   const ConversationsView = () => (
     <View style={styles.container}>
-      <Header title="聊天" />
+      <Header title="Chat" />
       
       <View style={styles.searchBar}>
         <FontAwesome name="search" size={hp(2.5)} color={theme.colors.textLight} />
@@ -527,7 +527,7 @@ const Chat = () => {
           style={styles.searchInput}
           onPress={() => setShowSearch(true)}
         >
-          <Text style={styles.searchPlaceholder}>搜索用户邮箱...</Text>
+          <Text style={styles.searchPlaceholder}>Search user email...</Text>
         </TouchableOpacity>
       </View>
       
@@ -539,8 +539,8 @@ const Chat = () => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <FontAwesome name="envelope-o" size={hp(10)} color={theme.colors.gray} />
-            <Text style={styles.emptyMessage}>暂无聊天记录</Text>
-            <Text style={styles.emptySubMessage}>搜索并添加好友开始聊天</Text>
+            <Text style={styles.emptyMessage}>No chat history</Text>
+            <Text style={styles.emptySubMessage}>Search and add friends to start chatting</Text>
           </View>
         }
       />
@@ -560,15 +560,15 @@ const Chat = () => {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.container}>
-          <Header title="聊天" />
+          <Header title="Chat" />
           <View style={styles.notLoggedInContainer}>
             <FontAwesome name="user" size={hp(10)} color={theme.colors.gray} />
-            <Text style={styles.notLoggedInText}>请先登录</Text>
+            <Text style={styles.notLoggedInText}>Please log in first</Text>
             <TouchableOpacity 
               style={styles.loginButton}
               onPress={() => router.push('profile')}
             >
-              <Text style={styles.loginButtonText}>前往登录</Text>
+              <Text style={styles.loginButtonText}>Go to Login</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -608,23 +608,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: wp(4),
-    marginTop: hp(2),
-    marginBottom: hp(2),
-    paddingHorizontal: wp(3),
-    paddingVertical: hp(1.2),
+    marginTop: hp(1.5),
+    marginBottom: hp(1.5),
+    paddingHorizontal: wp(2.5),
+    paddingVertical: hp(0.8),
     backgroundColor: '#F0F0F0',
     borderRadius: theme.radius.lg,
   },
   searchInput: {
     flex: 1,
-    height: hp(5),
-    fontSize: hp(1.8),
+    height: hp(4),
+    fontSize: hp(1.6),
     color: theme.colors.text,
-    paddingVertical: hp(0.5),
+    paddingVertical: hp(0.3),
   },
   searchPlaceholder: {
     color: theme.colors.textLight,
-    fontSize: hp(1.7),
+    fontSize: hp(1.5),
     paddingLeft: wp(2),
   },
   conversationsList: {
@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: wp(4),
-    paddingVertical: hp(2),
+    paddingVertical: hp(1.5),
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
     gap: wp(3),
@@ -737,7 +737,7 @@ const styles = StyleSheet.create({
     paddingBottom: hp(10),
   },
   searchPrompt: {
-    fontSize: hp(1.8),
+    fontSize: hp(1.6),
     color: theme.colors.textLight,
     textAlign: 'center',
     marginTop: hp(10),

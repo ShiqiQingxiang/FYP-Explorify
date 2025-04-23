@@ -7,20 +7,95 @@ import Icon from '../../assets/icons'
 import MapView, { Marker, PROVIDER_GOOGLE, Callout } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
+import { supabase } from '../../lib/supabase'
 
-// 预设的旅游景点数据
-// 这是一个示例，开发者可以根据需要添加更多景点
-const TOURIST_ATTRACTIONS = [
+// Map style to show English labels
+const mapStyle = [
+  {
+    "elementType": "labels",
+    "stylers": [
+      {
+        "languageId": "en"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "labels.text",
+    "stylers": [
+      {
+        "languageId": "en"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.province",
+    "elementType": "labels.text",
+    "stylers": [
+      {
+        "languageId": "en"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.locality",
+    "elementType": "labels.text",
+    "stylers": [
+      {
+        "languageId": "en"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.text",
+    "stylers": [
+      {
+        "languageId": "en"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "elementType": "labels.text",
+    "stylers": [
+      {
+        "languageId": "en"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text",
+    "stylers": [
+      {
+        "languageId": "en"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text",
+    "stylers": [
+      {
+        "languageId": "en"
+      }
+    ]
+  }
+];
+
+// Default tourist attraction data (only for backup, actual data will be fetched from Supabase)
+const DEFAULT_TOURIST_ATTRACTIONS = [
   {
     id: '1',
-    title: '埃菲尔铁塔',
-    description: '法国巴黎的标志性建筑，于1889年完工，高300米。是世界上最具代表性的建筑之一。',
+    title: 'Eiffel Tower',
+    description: 'The iconic landmark in Paris, completed in 1889, standing at 300 meters tall. It is one of the most recognizable buildings in the world.',
     coordinate: {
       latitude: 48.8584,
       longitude: 2.2945,
     },
-    address: '巴黎, 法国',
-    category: '地标建筑',
+    address: 'Paris, France',
+    category: 'Landmark',
     rating: 4.7,
     photos: [],
     dateAdded: '2023-01-15T00:00:00.000Z',
@@ -29,42 +104,7 @@ const TOURIST_ATTRACTIONS = [
     website: 'https://www.toureiffel.paris/',
     contact: '+33 892 70 12 39'
   },
-  {
-    id: '2',
-    title: '故宫博物院',
-    description: '中国北京的明清两代的皇家宫殿，是中国古代宫廷建筑之精华。世界五大宫之一，世界文化遗产。',
-    coordinate: {
-      latitude: 39.9163,
-      longitude: 116.3972,
-    },
-    address: '北京市东城区景山前街4号',
-    category: '历史景点',
-    rating: 4.9,
-    photos: [],
-    dateAdded: '2023-01-20T00:00:00.000Z',
-    openHours: '8:30 AM - 5:00 PM (周一闭馆)',
-    ticketPrice: '¥60',
-    website: 'https://www.dpm.org.cn/',
-    contact: '+86 10 8500 7428'
-  },
-  {
-    id: '3',
-    title: '大峡谷国家公园',
-    description: '位于美国亚利桑那州西北部的科罗拉多高原上，由科罗拉多河经过数百万年冲刷而成，是世界上最壮观的自然奇观之一。',
-    coordinate: {
-      latitude: 36.1069,
-      longitude: -112.1129,
-    },
-    address: '亚利桑那州, 美国',
-    category: '自然景观',
-    rating: 4.8,
-    photos: [],
-    dateAdded: '2023-02-05T00:00:00.000Z',
-    openHours: '全天开放',
-    ticketPrice: '$35/车',
-    website: 'https://www.nps.gov/grca/',
-    contact: '+1 928-638-7888'
-  },
+  // ...other default attractions
 ];
 
 const Map = () => {
@@ -72,55 +112,132 @@ const Map = () => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [searchText, setSearchText] = useState('');
   const [region, setRegion] = useState({
-    latitude: 39.9163, // 默认位置为故宫博物院
+    latitude: 39.9163, // Default position (Forbidden City)
     longitude: 116.3972,
-    latitudeDelta: 40, // 初始缩放级别较大，以便显示全球景点
+    latitudeDelta: 40, // Initial zoom level to show global attractions
     longitudeDelta: 40,
   });
   const router = useRouter();
   const mapRef = useRef(null);
-  // 使用预设的旅游景点数据
-  const [attractions, setAttractions] = useState(TOURIST_ATTRACTIONS);
+  // State for storing attraction data
+  const [attractions, setAttractions] = useState([]);
   const [selectedAttraction, setSelectedAttraction] = useState(null);
   const bottomSheetAnim = useRef(new Animated.Value(0)).current;
+  const [isLoading, setIsLoading] = useState(true);
+  const [useSimulatedLocation, setUseSimulatedLocation] = useState(false);
+
+  // Terracotta Army location constant
+  const TERRACOTTA_ARMY_LOCATION = {
+    coords: {
+      latitude: 34.3841,
+      longitude: 109.2785,
+      accuracy: 5
+    }
+  };
+
+  // Fetch tourist spots from Supabase
+  const fetchTouristSpots = async () => {
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase
+        .from('tourist_spots')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching tourist spots:', error);
+        // If failed to fetch, use default data
+        setAttractions(DEFAULT_TOURIST_ATTRACTIONS);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        // Convert data format to match application structure
+        const formattedData = data.map(spot => ({
+          id: spot.id,
+          title: spot.name,
+          description: spot.description,
+          coordinate: {
+            latitude: spot.latitude,
+            longitude: spot.longitude,
+          },
+          address: spot.address,
+          category: spot.category,
+          rating: spot.rating,
+          photos: [],
+          dateAdded: spot.created_at,
+          openHours: spot.open_hours || null,
+          ticketPrice: spot.ticket_price || null,
+          website: spot.website || null,
+          contact: spot.contact || null,
+          taskTitle: spot.task_title || null,
+          taskDescription: spot.task_description || null,
+          taskPoints: spot.task_points || 10,
+          taskType: spot.task_type || 'photo'
+        }));
+        
+        setAttractions(formattedData);
+        console.log('Loaded', formattedData.length, 'tourist spots from Supabase');
+      } else {
+        console.log('No tourist spots found in database, using defaults');
+        setAttractions(DEFAULT_TOURIST_ATTRACTIONS);
+      }
+    } catch (error) {
+      console.error('Exception fetching tourist spots:', error);
+      setAttractions(DEFAULT_TOURIST_ATTRACTIONS);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
+    // Get location and attraction data
     (async () => {
       try {
+        // Request location permissions
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           setErrorMsg('Location permission is required');
           return;
         }
 
-        // 获取当前位置
-        let location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Highest
-        });
+        // If user chooses to use simulated location, set to Terracotta Army
+        if (useSimulatedLocation) {
+          setLocation(TERRACOTTA_ARMY_LOCATION);
+          console.log("Using simulated location at Terracotta Army");
+        } else {
+          // Otherwise get real location
+          let location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Highest
+          });
+          setLocation(location);
+        }
         
-        setLocation(location);
-        
-        // 初始化地图位置
-        // 注意：这里不会自动移动到用户当前位置，而是保持对景点的关注
+        // Fetch attraction data from database
+        await fetchTouristSpots();
         
       } catch (error) {
         console.error("Error getting location:", error);
         setErrorMsg("Could not get your location");
+        
+        // Even if getting location fails, still try to fetch attraction data
+        await fetchTouristSpots();
       }
     })();
-  }, []);
+  }, [useSimulatedLocation]); // Add dependency, re-execute when simulated location state changes
 
-  // 显示或隐藏底部信息面板
+  // Show or hide bottom info panel
   useEffect(() => {
     if (selectedAttraction) {
-      // 显示底部信息面板
+      // Show bottom info panel
       Animated.spring(bottomSheetAnim, {
         toValue: 1,
         useNativeDriver: true,
         friction: 8,
       }).start();
     } else {
-      // 隐藏底部信息面板
+      // Hide bottom info panel
       Animated.timing(bottomSheetAnim, {
         toValue: 0,
         duration: 200,
@@ -129,7 +246,7 @@ const Map = () => {
     }
   }, [selectedAttraction]);
 
-  // 前往用户当前位置
+  // Go to current location
   const goToCurrentLocation = () => {
     if (location) {
       const currentRegion = {
@@ -143,45 +260,45 @@ const Map = () => {
     }
   };
 
-  // 处理景点标记点击
+  // Handle attraction press
   const handleAttractionPress = (attraction) => {
     console.log("Attraction pressed:", attraction.title);
     setSelectedAttraction(attraction);
   };
 
-  // 关闭底部信息面板
+  // Close bottom info panel
   const closeBottomSheet = () => {
     setSelectedAttraction(null);
   };
 
-  // 显示景点路线
+  // Show attraction route
   const showDirections = (attraction) => {
     Alert.alert(
       "Directions",
       `Get directions to ${attraction.title}`,
       [{ text: "OK" }]
     );
-    // 在这里可以集成导航服务
+    // Here you can integrate navigation services
   };
 
-  // 分享景点信息
+  // Share attraction information
   const shareAttraction = (attraction) => {
     Alert.alert(
       "Share",
       `Share ${attraction.title}`,
       [{ text: "OK" }]
     );
-    // 在这里可以集成分享功能
+    // Here you can integrate sharing functionality
   };
 
-  // 底部信息面板的动画样式
+  // Bottom info panel animation style
   const bottomSheetTranslateY = bottomSheetAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [300, 0],
     extrapolate: 'clamp',
   });
 
-  // 前往某个特定景点
+  // Go to a specific attraction
   const goToAttraction = (attraction) => {
     if (mapRef.current) {
       const region = {
@@ -196,7 +313,7 @@ const Map = () => {
     }
   };
 
-  // 搜索景点
+  // Search attractions
   const searchAttractions = () => {
     if (!searchText.trim()) {
       return;
@@ -215,11 +332,41 @@ const Map = () => {
     }
   };
 
+  // Add functionality to set to Terracotta Army location
+  const setToTerracottaArmy = () => {
+    setUseSimulatedLocation(true);
+    // Automatically zoom to Terracotta Army location
+    if (mapRef.current) {
+      const region = {
+        latitude: TERRACOTTA_ARMY_LOCATION.coords.latitude,
+        longitude: TERRACOTTA_ARMY_LOCATION.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      mapRef.current.animateToRegion(region, 1000);
+    }
+  };
+
+  // Add custom marker style function
+  const getMarkerStyle = (category) => {
+    // Based on different categories, return different colors
+    const colors = {
+      'Historical Site': '#E74C3C', // Red
+      'Natural Landscape': '#27AE60', // Green
+      'Museum': '#8E44AD', // Purple
+      'Temple': '#F39C12', // Orange
+      'Landmark': '#3498DB', // Blue
+    };
+    
+    // Default color
+    return colors[category] || '#FF5733'; // If no matching category, use orange-red
+  };
+
   return (
     <View style={styles.mainContainer}>
       <StatusBar translucent backgroundColor="transparent" />
       
-      {/* 地图 */}
+      {/* Map */}
       <View style={styles.mapContainer}>
         <MapView
           ref={mapRef}
@@ -232,10 +379,14 @@ const Map = () => {
           rotateEnabled={true}
           zoomEnabled={true}
           onPress={() => {
-            // 点击地图空白处不做任何响应
+            // Click on map to close details
+            setSelectedAttraction(null);
           }}
+          customMapStyle={mapStyle}
+          urlTemplate="https://maps.googleapis.com/maps/vt?pb=!1m5!1m4!1i{z}!2i{x}!3i{y}!4i256!2m3!1e0!2sm!3i{language}!2m21!1e2!2sspotlight!5i1!8m18!1m3!1d4005.77!2d151.20!3d-33.88!3m2!1i1024!2i768!4f13.1!4m2!3e0!4m2!3e2!5m4!1s0x0%3A0x0!2zMzmrMCfDAyIzLjQiUyAxNTHCsDEyJzM2LjIiRQ!4m2!1sd!2sen!13m1!3b1&key={key}"
+          language="en"
         >
-          {/* 显示旅游景点标记 */}
+          {/* Display tourist attraction markers */}
           {attractions.map(attraction => (
             <Marker
               key={attraction.id}
@@ -244,38 +395,37 @@ const Map = () => {
               description={attraction.description}
               onPress={() => handleAttractionPress(attraction)}
             >
-              {/* 可以自定义标记的外观 */}
+              {/* New simple marker */}
               <View style={styles.customMarker}>
-                <Icon name="location" size={hp(3)} color={theme.colors.primary} />
+                <View style={[
+                  styles.markerPin,
+                  { backgroundColor: getMarkerStyle(attraction.category) }
+                ]}>
+                  <Icon 
+                    name="location" 
+                    size={hp(1.8)} 
+                    color="white" 
+                  />
+                </View>
               </View>
             </Marker>
           ))}
         </MapView>
 
-        {/* 控制按钮 */}
+        {/* Control buttons */}
         <View style={styles.controls}>
           <TouchableOpacity style={styles.controlButton} onPress={goToCurrentLocation}>
             <Icon name="location" size={hp(3)} color={theme.colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity 
-            style={styles.controlButton} 
-            onPress={() => {
-              // 显示所有景点列表，这里可以实现一个弹出列表
-              Alert.alert(
-                "Tourist Attractions",
-                "Select an attraction to view:",
-                attractions.map(attraction => ({
-                  text: attraction.title,
-                  onPress: () => goToAttraction(attraction)
-                }))
-              );
-            }}
+            style={[styles.controlButton, useSimulatedLocation && styles.activeControlButton]} 
+            onPress={setToTerracottaArmy}
           >
-            <Icon name="search" size={hp(3)} color={theme.colors.primary} />
+            <Icon name="user" size={hp(3)} color={useSimulatedLocation ? 'white' : theme.colors.primary} />
           </TouchableOpacity>
         </View>
         
-        {/* 搜索栏 */}
+        {/* Search bar */}
         <View style={styles.searchContainerAbsolute}>
           <View style={styles.searchBar}>
             <Icon name="search" size={hp(2.5)} color={theme.colors.textLight} />
@@ -291,7 +441,7 @@ const Map = () => {
           </View>
         </View>
 
-        {/* 景点信息面板 */}
+        {/* Attraction info panel */}
         {selectedAttraction && (
           <Animated.View 
             style={[
@@ -325,7 +475,7 @@ const Map = () => {
                 </View>
                 <Text style={styles.descriptionText}>{selectedAttraction.description}</Text>
                 
-                {/* 附加景点信息 */}
+                {/* Additional attraction information */}
                 {selectedAttraction.openHours && (
                   <View style={styles.detailItem}>
                     <Icon name="home" size={18} color={theme.colors.textLight} />
@@ -345,19 +495,44 @@ const Map = () => {
                 <TouchableOpacity 
                   style={styles.actionButton}
                   onPress={() => {
-                    // 跳转到任务页面，并传递景点信息
+                    // Jump to task page and pass attraction and task information
                     router.push({
                       pathname: 'task',
                       params: {
                         id: selectedAttraction.id,
                         title: selectedAttraction.title,
-                        description: selectedAttraction.description
+                        description: selectedAttraction.description,
+                        latitude: selectedAttraction.coordinate.latitude,
+                        longitude: selectedAttraction.coordinate.longitude,
+                        userLatitude: useSimulatedLocation ? TERRACOTTA_ARMY_LOCATION.coords.latitude : (location ? location.coords.latitude : null),
+                        userLongitude: useSimulatedLocation ? TERRACOTTA_ARMY_LOCATION.coords.longitude : (location ? location.coords.longitude : null),
+                        isSimulatedLocation: useSimulatedLocation,
+                        taskTitle: selectedAttraction.taskTitle,
+                        taskDescription: selectedAttraction.taskDescription,
+                        taskPoints: selectedAttraction.taskPoints,
+                        taskType: selectedAttraction.taskType
                       }
                     });
                   }}
                 >
                   <Icon name="plus" size={22} color={theme.colors.primary} />
-                  <Text style={styles.actionText}>任务挑战</Text>
+                  <Text style={styles.actionText}>Task Challenge</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => {
+                    // Jump to attraction details page
+                    router.push({
+                      pathname: 'spotDetail',
+                      params: {
+                        id: selectedAttraction.id
+                      }
+                    });
+                  }}
+                >
+                  <Icon name="eye" size={22} color={theme.colors.primary} />
+                  <Text style={styles.actionText}>View Details</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -365,7 +540,7 @@ const Map = () => {
         )}
     </View>
     
-      {/* 底部导航栏 */}
+      {/* Bottom navigation bar */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push('home')}>
           <Icon name="home" size={hp(3)} color={theme.colors.text} />
@@ -377,7 +552,7 @@ const Map = () => {
         
         <TouchableOpacity style={styles.navItem} onPress={() => router.push('map')}>
           <View style={styles.addButton}>
-            <Icon name="plus" size={hp(3)} color="white" />
+            <Icon name="navigation" size={hp(3)} color="white" />
           </View>
         </TouchableOpacity>
         
@@ -465,6 +640,21 @@ const styles = StyleSheet.create({
   customMarker: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  markerPin: {
+    width: hp(3),
+    height: hp(3),
+    borderRadius: hp(1.5),
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
   },
   bottomNav: {
     flexDirection: 'row',
@@ -581,5 +771,8 @@ const styles = StyleSheet.create({
     fontSize: hp(1.6),
     color: theme.colors.text,
     fontWeight: theme.fonts.medium,
+  },
+  activeControlButton: {
+    backgroundColor: theme.colors.primary,
   },
 })

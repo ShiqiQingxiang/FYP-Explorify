@@ -1,26 +1,144 @@
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, StatusBar, Image } from 'react-native'
-import React, { useState } from 'react'
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, StatusBar, Image, ActivityIndicator } from 'react-native'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'expo-router'
 import { theme } from '../../constants/theme'
 import { hp, wp } from '../../helpers/common'
 import Icon from '../../assets/icons'
 import { useAuth } from '../../contexts/AuthContext'
 import Avatar from '../../components/Avatar'
+import { supabase } from '../../lib/supabase'
 
 const Search = () => {
   const router = useRouter();
   const { user } = useAuth();
   const [searchText, setSearchText] = useState('');
-  const [activeCategory, setActiveCategory] = useState('Most Viewed');
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [spotCategories, setSpotCategories] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [destinations, setDestinations] = useState([]);
+  const [filteredDestinations, setFilteredDestinations] = useState([]);
 
-  const categories = [
-    { id: 1, name: 'Most Popular' },
-    { id: 2, name: 'Nearby' },
-    { id: 3, name: 'Trending' },
-    { id: 4, name: 'Latest' },
-  ];
+  // 从Supabase获取景点标签
+  useEffect(() => {
+    const fetchSpotCategories = async () => {
+      try {
+        setIsLoading(true);
+        
+        const { data, error } = await supabase
+          .from('tourist_spots')
+          .select('category')
+          .order('category');
+        
+        if (error) {
+          console.error('Error fetching spot categories:', error);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          // 提取唯一的标签类别
+          const uniqueCategories = [...new Set(data.map(spot => spot.category))];
+          // 转换为UI需要的格式
+          const formattedCategories = uniqueCategories
+            .filter(category => category) // 过滤掉null或空字符串
+            .map((category, index) => ({
+              id: index + 1,
+              name: category
+            }));
+          
+          setSpotCategories(formattedCategories);
+          // 设置第一个类别为默认活跃类别
+          if(formattedCategories.length > 0 && !activeCategory) {
+            setActiveCategory(formattedCategories[0].name);
+          }
+          console.log('Loaded', formattedCategories.length, 'spot categories from Supabase');
+        }
+      } catch (error) {
+        console.error('Exception fetching spot categories:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const destinations = [
+    fetchSpotCategories();
+  }, []);
+
+  // 从Supabase获取景点数据
+  useEffect(() => {
+    const fetchTouristSpots = async () => {
+      try {
+        setIsLoading(true);
+        
+        const { data, error } = await supabase
+          .from('tourist_spots')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error fetching tourist spots:', error);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          // 转换数据格式以匹配应用需要的结构
+          const formattedData = data.map(spot => ({
+            id: spot.id,
+            name: spot.name,
+            country: spot.address?.split(',').pop()?.trim() || 'Unknown location',
+            image: spot.image_url || 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1738&q=80',
+            rating: spot.rating || 4.0,
+            category: spot.category,
+            description: spot.description,
+            coordinate: {
+              latitude: spot.latitude,
+              longitude: spot.longitude,
+            }
+          }));
+          
+          setDestinations(formattedData);
+          setFilteredDestinations(formattedData);
+          console.log('Loaded', formattedData.length, 'tourist spots from Supabase');
+        }
+      } catch (error) {
+        console.error('Exception fetching tourist spots:', error);
+        // 使用默认数据作为备用
+        setDestinations(DEFAULT_DESTINATIONS);
+        setFilteredDestinations(DEFAULT_DESTINATIONS);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTouristSpots();
+  }, []);
+
+  // 当活跃类别改变时过滤景点
+  useEffect(() => {
+    if (!activeCategory || activeCategory === 'All') {
+      setFilteredDestinations(destinations);
+      return;
+    }
+
+    const filtered = destinations.filter(
+      destination => destination.category === activeCategory
+    );
+    
+    setFilteredDestinations(filtered);
+    console.log(`Filtered to ${filtered.length} spots with category "${activeCategory}"`);
+  }, [activeCategory, destinations]);
+
+  // 使用从Supabase获取的标签，如果没有则使用默认标签
+  const categories = spotCategories.length > 0 
+    ? [{ id: 0, name: 'All' }, ...spotCategories] 
+    : [
+        { id: 0, name: 'All' },
+        { id: 1, name: 'Most Popular' },
+        { id: 2, name: 'Nearby' },
+        { id: 3, name: 'Trending' },
+        { id: 4, name: 'Latest' },
+      ];
+
+  // 备用景点数据
+  const DEFAULT_DESTINATIONS = [
     {
       id: 1,
       name: 'Bali',
@@ -43,6 +161,32 @@ const Search = () => {
       rating: 4.8,
     },
   ];
+
+  // 搜索功能
+  const handleSearch = () => {
+    if (!searchText.trim()) {
+      // 如果搜索框为空，恢复按类别过滤的结果
+      if (!activeCategory || activeCategory === 'All') {
+        setFilteredDestinations(destinations);
+      } else {
+        const filtered = destinations.filter(
+          destination => destination.category === activeCategory
+        );
+        setFilteredDestinations(filtered);
+      }
+      return;
+    }
+    
+    const query = searchText.toLowerCase();
+    const results = destinations.filter(
+      destination => 
+        destination.name.toLowerCase().includes(query) || 
+        destination.country.toLowerCase().includes(query) ||
+        (destination.description && destination.description.toLowerCase().includes(query))
+    );
+    
+    setFilteredDestinations(results);
+  };
 
   return (
     <View style={styles.container}>
@@ -70,10 +214,12 @@ const Search = () => {
             <Icon name="search" size={hp(2.5)} color={theme.colors.textLight} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search for places, hotels, etc..."
+              placeholder="Search for places, attractions, hotels..."
               value={searchText}
               onChangeText={setSearchText}
               placeholderTextColor={theme.colors.textLight}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
             />
           </View>
         </View>
@@ -86,7 +232,15 @@ const Search = () => {
           </TouchableOpacity>
         </View>
 
-        {/* 类别选择 */}
+        {/* 加载指示器 */}
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Loading attractions...</Text>
+          </View>
+        )}
+
+        {/* 类别选择 - 改回横向滚动 */}
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
@@ -113,39 +267,59 @@ const Search = () => {
           ))}
         </ScrollView>
 
-        {/* 目的地卡片 */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.destinationsContainer}
-        >
-          {destinations.map(destination => (
-            <TouchableOpacity 
-              key={destination.id}
-              style={styles.destinationCard}
-              onPress={() => router.push(`destination/${destination.id}`)}
-            >
-              <Image 
-                source={{ uri: destination.image }} 
-                style={styles.destinationImage} 
-                resizeMode="cover"
-              />
-              <View style={styles.destinationInfo}>
-                <Text style={styles.destinationName}>
-                  {destination.name}, {destination.country}
-                </Text>
-                <View style={styles.locationContainer}>
-                  <Icon name="location" size={hp(1.8)} color={theme.colors.textLight} />
-                  <Text style={styles.destinationCountry}>{destination.country}</Text>
-                </View>
+        {/* 目的地卡片 - 改为网格布局 */}
+        {!isLoading && (
+          <>
+            {filteredDestinations.length > 0 ? (
+              <View style={styles.destinationsGrid}>
+                {filteredDestinations.map(destination => (
+                  <TouchableOpacity 
+                    key={destination.id}
+                    style={styles.destinationCard}
+                    onPress={() => router.push({
+                      pathname: 'spotDetail',
+                      params: { id: destination.id }
+                    })}
+                  >
+                    <Image 
+                      source={{ uri: destination.image }} 
+                      style={styles.destinationImage} 
+                      resizeMode="cover"
+                    />
+                    <View style={styles.destinationInfo}>
+                      <Text style={styles.destinationName}>
+                        {destination.name}
+                      </Text>
+                      <View style={styles.locationContainer}>
+                        <Icon name="location" size={hp(1.8)} color={theme.colors.textLight} />
+                        <Text style={styles.destinationCountry}>{destination.country}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.ratingContainer}>
+                      <Icon name="heart" size={hp(1.8)} color={theme.colors.primary} />
+                      <Text style={styles.ratingText}>{destination.rating}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
               </View>
-              <View style={styles.ratingContainer}>
-                <Icon name="heart" size={hp(1.8)} color={theme.colors.primary} />
-                <Text style={styles.ratingText}>{destination.rating}</Text>
+            ) : (
+              <View style={styles.noResultsContainer}>
+                <Icon name="search" size={hp(5)} color={theme.colors.textLight} />
+                <Text style={styles.noResultsText}>No attractions found</Text>
+                <TouchableOpacity 
+                  style={styles.resetButton}
+                  onPress={() => {
+                    setActiveCategory('All');
+                    setSearchText('');
+                    setFilteredDestinations(destinations);
+                  }}
+                >
+                  <Text style={styles.resetButtonText}>Reset Filters</Text>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+            )}
+          </>
+        )}
       </ScrollView>
 
       {/* 底部导航栏 */}
@@ -160,7 +334,7 @@ const Search = () => {
         
         <TouchableOpacity style={styles.navItem} onPress={() => router.push('map')}>
           <View style={styles.addButton}>
-            <Icon name="plus" size={hp(3)} color="white" />
+            <Icon name="navigation" size={hp(3)} color="white" />
           </View>
         </TouchableOpacity>
         
@@ -230,6 +404,7 @@ const styles = StyleSheet.create({
     marginLeft: wp(2),
     fontSize: hp(1.8),
     color: theme.colors.text,
+    padding: 0,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -248,9 +423,18 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: theme.fonts.medium,
   },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: hp(5),
+  },
+  loadingText: {
+    marginTop: hp(1),
+    fontSize: hp(1.8),
+    color: theme.colors.textLight,
+  },
   categoriesContainer: {
     paddingHorizontal: wp(4),
-    gap: wp(3),
     marginBottom: hp(2.5),
   },
   categoryItem: {
@@ -258,6 +442,7 @@ const styles = StyleSheet.create({
     paddingVertical: hp(0.8),
     borderRadius: theme.radius.full,
     backgroundColor: '#f1f1f1',
+    marginRight: wp(3),
   },
   activeCategoryItem: {
     backgroundColor: '#000',
@@ -270,13 +455,15 @@ const styles = StyleSheet.create({
   activeCategoryText: {
     color: 'white',
   },
-  destinationsContainer: {
+  destinationsGrid: {
     paddingHorizontal: wp(4),
     paddingBottom: hp(15),
-    gap: wp(3),
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   destinationCard: {
-    width: wp(45),
+    width: wp(44),
     height: hp(30),
     borderRadius: theme.radius.lg,
     overflow: 'hidden',
@@ -289,6 +476,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 2,
+    marginBottom: hp(3),
   },
   destinationImage: {
     width: '100%',
@@ -329,6 +517,29 @@ const styles = StyleSheet.create({
     fontSize: hp(1.5),
     color: theme.colors.textLight,
     fontWeight: theme.fonts.semibold,
+  },
+  noResultsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: hp(5),
+    paddingHorizontal: wp(4),
+  },
+  noResultsText: {
+    marginTop: hp(1),
+    fontSize: hp(1.8),
+    color: theme.colors.textLight,
+    textAlign: 'center',
+  },
+  resetButton: {
+    marginTop: hp(2),
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(1),
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.lg,
+  },
+  resetButtonText: {
+    color: 'white',
+    fontWeight: theme.fonts.medium,
   },
   bottomNav: {
     flexDirection: 'row',
