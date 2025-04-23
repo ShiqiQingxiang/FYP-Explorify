@@ -11,6 +11,7 @@ import { decode } from 'base64-arraybuffer'
 import Header from '../../components/Header'
 import { supabase } from '../../lib/supabase'
 import config, { loadSecureConfig } from '../../lib/config'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const Task = () => {
   const params = useLocalSearchParams();
@@ -24,8 +25,9 @@ const Task = () => {
   const [verificationResult, setVerificationResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [user, setUser] = useState(null);
 
-  // 加载配置
+  // Load configuration
   useEffect(() => {
     const loadConfig = async () => {
       await loadSecureConfig();
@@ -35,24 +37,43 @@ const Task = () => {
     loadConfig();
   }, []);
 
-  // 从参数中获取景点和任务信息
+  // Get user information
+  useEffect(() => {
+    const getUser = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (data?.user) {
+          console.log('User information retrieved:', data.user.id);
+          setUser(data.user);
+        } else {
+          console.log('Failed to get user information');
+        }
+      } catch (error) {
+        console.error('Failed to get user information:', error);
+      }
+    };
+    
+    getUser();
+  }, []);
+
+  // Get tourist spot and task information from parameters
   const attraction = {
     id: params.id,
     title: params.title || 'Tourist Attraction',
     description: params.description || 'Complete a challenge at this attraction',
-    // 添加景点坐标信息，来自路由参数
+    // Add spot coordinate information from route parameters
     latitude: params.latitude ? parseFloat(params.latitude) : null,
     longitude: params.longitude ? parseFloat(params.longitude) : null,
   };
 
-  // 从参数中获取当前用户位置信息（真实或模拟）
+  // Get current user location information from parameters (real or simulated)
   const userLocation = {
     latitude: params.userLatitude ? parseFloat(params.userLatitude) : null,
     longitude: params.userLongitude ? parseFloat(params.userLongitude) : null,
     isSimulated: params.isSimulatedLocation === 'true'
   };
 
-  // 从参数中获取任务信息，如果没有则使用默认值
+  // Get task information from parameters, use default values if not available
   const taskDetails = {
     title: params.taskTitle || 'Photo Challenge',
     description: params.taskDescription || 'Take a photo that showcases this attraction',
@@ -60,6 +81,183 @@ const Task = () => {
     difficulty: params.taskPoints ? (parseInt(params.taskPoints) > 20 ? 'Hard' : 'Medium') : 'Easy',
     type: params.taskType || 'photo'
   };
+
+  // Load user task status (completed or under review)
+  useEffect(() => {
+    const checkTaskStatus = async () => {
+      try {
+        if (!attraction.id) return;
+        
+        console.log('开始检查任务ID:', attraction.id, '的状态');
+        
+        // 获取用户ID
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.log('未找到用户信息，无法检查任务状态');
+          return;
+        }
+        
+        console.log('检查用户ID:', user.id, '的任务状态');
+        console.log('仅从user_tasks表获取任务状态，不使用缓存');
+        
+        // 从user_tasks表获取任务状态
+        const { data: userTasks, error: userTasksError } = await supabase
+          .from('user_tasks')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('task_id', attraction.id)
+          .order('created_at', { ascending: false });
+          
+        if (userTasksError) {
+          console.error('获取任务状态失败:', userTasksError);
+          return;
+        }
+        
+        console.log('找到的任务数量:', userTasks?.length || 0);
+        
+        // 如果没有任务记录，说明任务尚未开始
+        if (!userTasks || userTasks.length === 0) {
+          console.log('未找到任务记录，用户可以提交任务');
+          setTaskCompleted(false);
+          setVerificationResult(null);
+          return;
+        }
+        
+        // 使用最新的任务记录
+        const latestTask = userTasks[0];
+        console.log('最新任务记录:', latestTask);
+        
+        // 检查任务是否已完成
+        if (latestTask.verified === true || latestTask.completed === true) {
+          console.log('任务已完成');
+          setTaskCompleted(true);
+          setVerificationResult({
+            isCompleted: true,
+            isPending: false,
+            message: 'You have already completed this task and cannot submit again',
+            points: latestTask.points_earned || taskDetails.points
+          });
+          return;
+        }
+        
+        // 检查任务是否待审核
+        if (latestTask.verification_status === 'manual_pending') {
+          console.log('任务正在等待审核');
+          if (latestTask.image_url) {
+            setImage(latestTask.image_url);
+          }
+          
+          setVerificationResult({
+            isCompleted: false,
+            isPending: true,
+            message: 'Automatic recognition unsuccessful, submitted for manual review. Please wait.'
+          });
+          return;
+        }
+        
+        // 检查任务是否被拒绝
+        if (latestTask.verification_status === 'manual_rejected') {
+          console.log('任务被拒绝');
+          setVerificationResult({
+            isCompleted: false,
+            isPending: false,
+            isRejected: true,
+            message: 'Your submission was not approved. You can submit again.',
+            temporary: true // 标记为临时状态
+          });
+          return;
+        }
+        
+        // 默认状态：任务可以提交
+        console.log('任务处于可提交状态');
+        setTaskCompleted(false);
+        setVerificationResult(null);
+        
+      } catch (err) {
+        console.error('加载任务状态时出错:', err);
+      }
+    };
+    
+    // 清理任务界面状态
+    const clearTaskState = () => {
+      setImage(null);
+      setTaskCompleted(false);
+      setVerificationResult(null);
+    };
+    
+    // 添加强制状态设置函数 (仅用于开发测试)
+    const forceSetStatus = async () => {
+      const statusParam = params.status;
+      
+      if (statusParam === 'completed') {
+        console.log('Forcing completed status via URL parameter');
+        setTaskCompleted(true);
+        setVerificationResult({
+          isCompleted: true,
+          isPending: false,
+          message: 'You have already completed this task and cannot submit again',
+          points: taskDetails.points
+        });
+        return true;
+      } 
+      else if (statusParam === 'pending') {
+        console.log('Forcing pending review status via URL parameter');
+        setVerificationResult({
+          isCompleted: false,
+          isPending: true,
+          message: 'Your photo has been submitted for manual review. Points will be awarded upon approval.'
+        });
+        return true;
+      }
+      else if (statusParam === 'rejected') {
+        console.log('Forcing rejected status via URL parameter');
+        setVerificationResult({
+          isCompleted: false,
+          isPending: false,
+          isRejected: true,
+          message: 'Your submission was not approved. You can submit again.',
+          temporary: true
+        });
+        return true;
+      }
+      
+      return false;
+    };
+    
+    // 初始化任务状态
+    const initializeStatus = async () => {
+      // 清除所有状态
+      clearTaskState();
+      
+      // 检查是否有开发参数
+      const forcedStatus = await forceSetStatus();
+      if (forcedStatus) return;
+      
+      // 强制刷新
+      if (params.forceRefresh === 'true') {
+        console.log('强制刷新状态');
+        checkTaskStatus();
+        return;
+      }
+      
+      // 从数据库获取状态
+      await checkTaskStatus();
+    };
+    
+    // 启动初始化
+    initializeStatus();
+    
+    // 设置定期刷新，每30秒检查一次状态
+    const statusRefreshInterval = setInterval(() => {
+      console.log('定期检查任务状态...');
+      checkTaskStatus().catch(e => console.error('定期状态更新失败:', e));
+    }, 30000); // 30秒刷新一次
+    
+    // 页面销毁时清除定时器
+    return () => {
+      clearInterval(statusRefreshInterval);
+    };
+  }, [attraction.id, params.status, params.forceRefresh, taskDetails.points]);
 
   // 计算两个坐标之间的距离（单位：公里）
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -187,35 +385,35 @@ const Task = () => {
     }
   };
 
-  // 提交任务进行验证
+  // Submit task for verification
   const submitTaskForVerification = async (taskId, imageUri, modelName) => {
     try {
       setIsLoading(true);
       setSubmitting(true);
       
-      // 确保配置已加载
+      // Ensure configuration is loaded
       if (!configLoaded) {
         await loadSecureConfig();
       }
       
-      // 读取图像文件为 base64
+      // Read image file as base64
       const base64Image = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
       
-      // 从配置获取API信息
+      // Get API information from configuration
       const apiUrl = config.api.gatewayUrl;
       const apiKey = config.api.key;
       
-      // 调试日志 - 检查API配置
-      console.log('=== API配置调试信息 ===');
+      // Debug log - Check API configuration
+      console.log('=== API Configuration Debug Info ===');
       console.log('API URL:', apiUrl);
-      console.log('API密钥是否存在:', apiKey ? '是' : '否');
+      console.log('API key exists:', apiKey ? 'Yes' : 'No');
       if (apiKey) {
-        console.log('API密钥前4位:', apiKey.substring(0, 4));
+        console.log('First 4 chars of API key:', apiKey.substring(0, 4));
       }
       
-      // 如果没有API密钥，显示错误
+      // If there is no API key, display error
       if (!apiKey) {
         console.error('缺少API密钥，无法验证任务');
         Alert.alert(
@@ -226,10 +424,10 @@ const Task = () => {
         return false;
       }
       
-      // 准备请求数据
+      // Prepare request data
       const requestData = {
         imageBase64: `data:image/jpeg;base64,${base64Image}`,
-        modelName: modelName || 'Terracotta-Warriors' // 默认模型名
+        modelName: modelName || 'Terracotta-Warriors' // Default model name
       };
       
       console.log('正在提交图像进行分析...');
@@ -237,16 +435,16 @@ const Task = () => {
       console.log('请求模型名称:', requestData.modelName);
       console.log('图像大小(bytes):', base64Image.length);
       
-      // 尝试不同的资源路径 - 测试3种可能的URL格式
+      // Try different resource paths - Test 3 possible URL formats
       let response = null;
       let success = false;
       const possiblePaths = [
-        '', // 原始路径
-        '/analyze', // 尝试添加/analyze资源路径
-        '/image' // 尝试添加/image资源路径
+        '', // Original path
+        '/analyze', // Try adding /analyze resource path
+        '/image' // Try adding /image resource path
       ];
       
-      // 尝试不同的认证头名称
+      // Try different authentication header names
       const possibleAuthHeaders = [
         { 'x-api-key': apiKey },
         { 'X-Api-Key': apiKey },
@@ -256,25 +454,25 @@ const Task = () => {
       
       console.log('尝试多种请求格式...');
       
-      // 首先尝试不同路径
+      // First try different paths
       for (const path of possiblePaths) {
         const currentUrl = `${apiUrl}${path}`;
         console.log(`尝试请求URL: ${currentUrl}`);
         
-        // 然后尝试不同的认证头
+        // Then try different authentication headers
         for (const authHeader of possibleAuthHeaders) {
-          // 合并认证头与内容类型头
+          // Merge authentication header with content type header
           const currentHeaders = {
             'Content-Type': 'application/json',
             ...authHeader
           };
           
-          // 记录当前使用的认证头类型（隐藏完整密钥）
+          // Record the current used authentication header type (hide full key)
           const authHeaderType = Object.keys(authHeader)[0];
           console.log(`- 使用认证头: ${authHeaderType}`);
           
           try {
-            // 发送请求到 API Gateway
+            // Send request to API Gateway
             response = await fetch(currentUrl, {
               method: 'POST',
               headers: currentHeaders,
@@ -293,16 +491,16 @@ const Task = () => {
           }
         }
         
-        if (success) break; // 如果找到成功的组合，则退出外层循环
+        if (success) break; // If successful combination found, exit outer loop
       }
       
-      // 如果所有尝试都失败，使用最后一次的响应
+      // If all attempts fail, switch to manual review
       if (!success && !response) {
-        console.log('所有API请求格式都失败，切换到模拟数据模式');
-        return useMockDataForTesting(taskId, imageUri, modelName);
+        console.log('所有API请求格式都失败，转为人工审核');
+        return submitForManualVerification(taskId, imageUri, modelName);
       }
       
-      // 记录响应状态和头信息
+      // Record response status and header information
       console.log('API响应状态:', response.status);
       console.log('API响应状态文本:', response.statusText);
       
@@ -313,7 +511,7 @@ const Task = () => {
       console.log('API响应头:', JSON.stringify(responseHeaders));
       
       if (!response.ok) {
-        // 尝试读取错误响应
+        // Try to read error response
         let errorBody = '';
         try {
           errorBody = await response.text();
@@ -322,55 +520,308 @@ const Task = () => {
           console.error('无法读取错误响应内容:', e);
         }
         
-        // 如果API调用失败，使用模拟数据
-        console.log('API请求失败，切换到模拟数据模式');
-        return useMockDataForTesting(taskId, imageUri, modelName);
+        // If API call fails, switch to manual review
+        console.log('API请求失败，转为人工审核');
+        return submitForManualVerification(taskId, imageUri, modelName);
       }
       
       const result = await response.json();
-      console.log('分析结果:', result);
+      console.log('Analysis result:', result);
       
       if (result.success) {
-        // 识别成功，调用任务完成 API
+        // Recognition successful, call task completion API
         const completeResponse = await supabase
-          .from('tasks')
-          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .from('user_tasks')
+          .update({ 
+            status: 'completed', 
+            verified: true,
+            verification_status: 'auto_approved',
+            points_earned: taskDetails.points 
+          })
           .eq('id', taskId);
         
         if (completeResponse.error) {
-          throw new Error(`更新任务状态失败: ${completeResponse.error.message}`);
+          throw new Error(`Failed to update task status: ${completeResponse.error.message}`);
         }
         
-        Alert.alert('成功', `任务验证通过！置信度: ${result.confidence.toFixed(2)}%`);
+        setTaskCompleted(true);
+        setVerificationResult({
+          isCompleted: true,
+          confidence: result.confidence || 95,
+          matchedLabels: result.matchedLabels || []
+        });
+        
+        Alert.alert('Success', `Task verification passed! Confidence: ${result.confidence ? result.confidence.toFixed(2) : '95'}%`);
         return true;
       } else {
-        // 识别失败
-        Alert.alert('验证失败', result.message || '无法确认这是目标景点，请重试');
-        return false;
+        // Recognition failed, switch to manual review
+        return submitForManualVerification(taskId, imageUri, modelName);
       }
     } catch (error) {
       console.error('任务验证错误:', error);
-      Alert.alert('错误', `验证过程中出错: ${error.message}`);
-      return false;
+      
+      // Even if there's an error, switch to manual review
+      try {
+        return submitForManualVerification(attraction.id, imageUri, modelName);
+      } catch (manualError) {
+        console.error('转为人工审核时出错:', manualError);
+        Alert.alert('Error', `验证过程中出错: ${error.message}`);
+        return false;
+      }
     } finally {
       setIsLoading(false);
       setSubmitting(false);
     }
   };
 
-  // 模拟数据处理器 - 当API不可用时使用
+  // Submit manual review
+  const submitForManualVerification = async (taskId, imageUri, modelName) => {
+    try {
+      console.log('开始人工审核流程...');
+      
+      // 无论之前状态如何，清除临时拒绝状态
+      if (verificationResult?.isRejected) {
+        console.log('清除之前的拒绝状态');
+        setVerificationResult(null);
+      }
+      
+      // 验证数据库表是否存在
+      console.log('验证数据库表结构...');
+      const { data: tablesData, error: tablesError } = await supabase
+        .from('manual_verifications')
+        .select('*')
+        .limit(1);
+        
+      if (tablesError) {
+        console.error('数据库表验证失败:', tablesError);
+        Alert.alert('Error', 'Database structure error: ' + tablesError.message);
+        return false;
+      } else {
+        console.log('manual_verifications表验证成功');
+      }
+      
+      // Get user ID
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      if (!currentUser || !currentUser.id) {
+        throw new Error('Not logged in or unable to get user ID');
+      }
+      
+      const userId = currentUser.id;
+      console.log('用户ID:', userId, '任务ID:', taskId);
+      
+      try {
+        // Convert image to base64, not blob (to avoid blob processing issues)
+        const base64Image = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        // Upload image to supabase storage
+        const timestamp = new Date().getTime();
+        const filePath = `verifications/${timestamp}_task_${taskId}.jpg`;
+        
+        console.log('Uploading image to storage:', filePath);
+        
+        // Convert base64 to ArrayBuffer (more reliable)
+        const arrayBuffer = decode(base64Image);
+        
+        let uploadAttempts = 0;
+        const maxAttempts = 3;
+        let fileData, fileError;
+        
+        // Add retry logic
+        while (uploadAttempts < maxAttempts) {
+          uploadAttempts++;
+          console.log(`Upload attempt (${uploadAttempts}/${maxAttempts})...`);
+          
+          try {
+            const uploadResult = await supabase.storage
+              .from('uploads')  // Use the public uploads bucket
+              .upload(filePath, arrayBuffer, {
+                contentType: 'image/jpeg',
+                upsert: true // If exists, overwrite
+              });
+              
+            fileData = uploadResult.data;
+            fileError = uploadResult.error;
+            
+            if (!fileError) break; // Upload successful, exit loop
+            
+            console.error(`Upload attempt ${uploadAttempts} failed:`, fileError);
+            if (uploadAttempts < maxAttempts) {
+              // Wait one second before retrying
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          } catch (e) {
+            console.error(`上传尝试 ${uploadAttempts} 出错:`, e);
+            if (uploadAttempts >= maxAttempts) fileError = e;
+          }
+        }
+        
+        if (fileError) {
+          console.error('Image upload still failed after multiple attempts:', fileError);
+          throw new Error(`Image upload failed: ${fileError.message || 'Network error'}`);
+        }
+        
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('uploads')  // Use the public uploads bucket
+          .getPublicUrl(filePath);
+        
+        console.log('Image uploaded successfully, URL:', publicUrl);
+        
+        // Create or update user task
+        let userTaskId = null;
+        
+        // Check if task exists
+        const { data: existingTasks, error: checkError } = await supabase
+          .from('user_tasks')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('task_id', taskId)
+          .maybeSingle();
+        
+        if (checkError) {
+          console.error('检查任务是否存在时出错:', checkError);
+        }
+        
+        if (existingTasks && existingTasks.id) {
+          // Update existing task
+          userTaskId = existingTasks.id;
+          console.log('更新现有任务:', userTaskId);
+          
+          const { error: updateError } = await supabase
+            .from('user_tasks')
+            .update({ 
+              verification_status: 'manual_pending',
+              image_url: publicUrl 
+            })
+            .eq('id', userTaskId);
+            
+          if (updateError) {
+            console.error('更新任务状态失败:', updateError);
+            throw new Error('更新任务状态失败');
+          }
+        } else {
+          // Create new task
+          console.log('创建新任务');
+          const { data: newTask, error: createError } = await supabase
+            .from('user_tasks')
+            .insert({
+              user_id: userId,
+              task_id: taskId,
+              verification_status: 'manual_pending',
+              image_url: publicUrl
+            })
+            .select('id')
+            .single();
+            
+          if (createError) {
+            console.error('创建任务记录失败:', createError);
+            throw new Error('创建任务记录失败');
+          }
+          
+          userTaskId = newTask.id;
+        }
+        
+        // Check if there is existing verification record
+        console.log('检查是否已有审核记录');
+        const { data: existingVerification, error: checkVerificationError } = await supabase
+          .from('manual_verifications')
+          .select('id')
+          .eq('user_task_id', userTaskId)
+          .maybeSingle();
+          
+        if (checkVerificationError) {
+          console.error('检查审核记录时出错:', checkVerificationError);
+          throw new Error('检查审核记录时出错');
+        }
+        
+        if (existingVerification && existingVerification.id) {
+          // Update existing verification record
+          console.log('更新现有审核记录:', existingVerification.id);
+          const { error: updateVerificationError } = await supabase
+            .from('manual_verifications')
+            .update({
+              image_url: publicUrl,
+              status: 'pending',
+              submitted_at: new Date().toISOString() // Update submission time
+            })
+            .eq('id', existingVerification.id);
+            
+          if (updateVerificationError) {
+            console.error('更新审核记录失败:', updateVerificationError);
+            throw new Error('更新审核记录失败');
+          }
+        } else {
+          // Create new verification record
+          console.log('创建新的审核记录');
+          const { data: verificationData, error: verificationError } = await supabase
+            .from('manual_verifications')
+            .insert({
+              user_task_id: userTaskId,
+              user_id: userId,
+              spot_id: taskId,
+              image_url: publicUrl,
+              status: 'pending',
+              submitted_at: new Date().toISOString()  // 添加提交时间字段
+            })
+            .select('*')
+            .single();
+
+            if (verificationError) {
+              console.error('Failed to create verification record:', verificationError);
+              console.error('Error details:', JSON.stringify(verificationError, null, 2));
+              console.error('Attempted data:', JSON.stringify({
+                user_task_id: userTaskId,
+                user_id: userId,
+                spot_id: taskId,
+                status: 'pending'
+              }, null, 2));
+              throw new Error(`Failed to create verification record: ${verificationError.message}`);
+            } else {
+              console.log('审核记录创建成功:', verificationData);
+            }
+        }
+        
+        // Set result status
+        setVerificationResult({
+          isCompleted: false,
+          isPending: true,
+          message: 'Automatic recognition unsuccessful, submitted for manual review. Please wait.'
+        });
+        
+        Alert.alert(
+          'Submitted for Review', 
+          'Your photo will be reviewed by an administrator. You will be notified of the result.'
+        );
+        
+        return true;
+      } catch (uploadError) {
+        // Special handling for upload error
+        console.error('图片上传处理过程中出错:', uploadError);
+        throw new Error(`提交图片时出错: ${uploadError.message}`);
+      }
+    } catch (error) {
+      console.error('Manual verification submission failed:', error);
+      Alert.alert('Error', `Submission failed: ${error.message}`);
+      return false;
+    }
+  };
+
+  // Mock data processor - Use when API is unavailable
   const useMockDataForTesting = async (taskId, imageUri, modelName) => {
     try {
       console.log('====== 使用模拟数据 ======');
       
-      // 显示模拟数据提示
+      // Display mock data prompt
       Alert.alert(
         '开发模式',
         'API无法访问，正在使用模拟数据进行测试',
         [{ text: '确定', style: 'default' }]
       );
       
-      // 创建模拟响应数据
+      // Create mock response data
       const mockResult = {
         success: true,
         isCompleted: true,
@@ -381,7 +832,7 @@ const Task = () => {
       
       console.log('模拟分析结果:', mockResult);
       
-      // 更新任务状态
+      // Update task status
       try {
         const completeResponse = await supabase
           .from('tasks')
@@ -395,18 +846,18 @@ const Task = () => {
         console.error('模拟模式: 更新任务状态异常:', e);
       }
       
-      // 设置验证结果
+      // Set verification result
       setVerificationResult({
         isCompleted: true,
         confidence: mockResult.confidence,
         matchedLabels: mockResult.matchedLabels
       });
       
-      Alert.alert('成功', `任务验证通过！置信度: ${mockResult.confidence.toFixed(2)}%`);
+      Alert.alert('Success', `Task verification passed! Confidence: ${mockResult.confidence.toFixed(2)}%`);
       return true;
     } catch (error) {
       console.error('模拟数据处理错误:', error);
-      Alert.alert('错误', `模拟处理过程中出错: ${error.message}`);
+      Alert.alert('Error', `模拟处理过程中出错: ${error.message}`);
       return false;
     } finally {
       setIsLoading(false);
@@ -414,7 +865,7 @@ const Task = () => {
     }
   };
 
-  // 渲染任务详情
+  // Render task details
   const renderTaskDetails = () => (
     <View style={styles.taskCard}>
       <View style={styles.taskHeader}>
@@ -426,12 +877,7 @@ const Task = () => {
       
       <Text style={styles.taskDescription}>{taskDetails.description}</Text>
       
-      <View style={styles.rewards}>
-        <Icon name="heart" size={20} color={theme.colors.primary} />
-        <Text style={styles.rewardText}>Earn {taskDetails.points} points on completion</Text>
-      </View>
-      
-      {/* 显示位置信息 */}
+      {/* Display location information */}
       {distance !== null && (
         <View style={[styles.locationStatus, !isNearAttraction && styles.locationError]}>
           <Icon name="location" size={20} color={isNearAttraction ? theme.colors.primary : 'red'} />
@@ -452,10 +898,104 @@ const Task = () => {
     </View>
   );
 
-  // 渲染验证结果
+  // Render verification result
   const renderVerificationResult = () => {
     if (!verificationResult) return null;
     
+    // Manual review status
+    if (verificationResult.isPending) {
+      return (
+        <View style={[styles.verificationCard, styles.pendingCard]}>
+          <View style={styles.verificationHeader}>
+            <Icon name="clock" size={30} color={theme.colors.warning} />
+            <Text style={styles.verificationTitle}>Under Review</Text>
+          </View>
+          
+          <Text style={styles.pendingText}>
+            Your photo has been submitted for manual review. Points will be awarded upon approval.
+          </Text>
+          
+          <View style={styles.pendingInfo}>
+            <Text style={styles.pendingInfoText}>
+              • Review usually completes within 24 hours
+            </Text>
+            <Text style={styles.pendingInfoText}>
+              • You will be notified of the review result
+            </Text>
+            <Text style={styles.pendingInfoText}>
+              • You can check review status on your profile page
+            </Text>
+          </View>
+          
+          <View style={styles.pendingTip}>
+            <Icon name="arrowLeft" size={16} color={theme.colors.primary} />
+            <Text style={styles.pendingTipText}>
+              You can return to the home page to explore other attractions
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    
+    // Task completed status - Detected when task completed
+    if (taskCompleted && verificationResult.message) {
+      return (
+        <View style={[styles.verificationCard, styles.completedCard]}>
+          <View style={styles.verificationHeader}>
+            <Icon name="award" size={30} color={theme.colors.success} />
+            <Text style={styles.verificationTitle}>Task Completed</Text>
+          </View>
+          
+          <Text style={styles.completedMessage}>
+            {verificationResult.message}
+          </Text>
+          
+          <View style={styles.completedDetails}>
+            <Text style={styles.completedHint}>You have received the reward for this task. You can explore other attractions.</Text>
+          </View>
+        </View>
+      );
+    }
+    
+    // Task rejected status
+    if (verificationResult.isRejected) {
+      return (
+        <View style={[styles.verificationCard, styles.rejectedCard]}>
+          <View style={styles.verificationHeader}>
+            <Icon name="delete" size={30} color={theme.colors.error} />
+            <Text style={styles.verificationTitle}>审核未通过</Text>
+            
+            {/* 添加关闭按钮 */}
+            <TouchableOpacity 
+              style={styles.closeButton}
+              onPress={() => setVerificationResult(null)}
+            >
+              <Icon name="close" size={24} color={theme.colors.textLight} />
+            </TouchableOpacity>
+          </View>
+          
+          <Text style={styles.rejectedMessage}>
+            {verificationResult.message || '您的照片未通过审核，请重新提交符合要求的照片'}
+          </Text>
+          
+          <View style={styles.rejectedInfo}>
+            <Text style={styles.rejectedInfoText}>Possible reasons:</Text>
+            <Text style={styles.rejectedInfoItem}>• Photo is unclear or unrecognizable</Text>
+            <Text style={styles.rejectedInfoItem}>• Photo content does not match task requirements</Text>
+            <Text style={styles.rejectedInfoItem}>• Photo may contain inappropriate content</Text>
+          </View>
+          
+          <View style={styles.rejectedTip}>
+            <Icon name="camera" size={16} color={theme.colors.primary} />
+            <Text style={styles.rejectedTipText}>
+              You can take a new photo and submit again
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    
+    // Original success/failure status display
     return (
       <View style={[
         styles.verificationCard,
@@ -467,7 +1007,7 @@ const Task = () => {
         
         {verificationResult.isCompleted && (
           <Text style={styles.confidenceText}>
-            Confidence: {verificationResult.confidence.toFixed(1)}%
+            Confidence: {verificationResult.confidence?.toFixed(1) || '100'}%
           </Text>
         )}
         
@@ -498,7 +1038,7 @@ const Task = () => {
         <ScrollView style={styles.content}>
           {renderTaskDetails()}
           
-          {/* 照片预览区域 */}
+          {/* Photo preview area */}
           <View style={styles.photoContainer}>
             {image ? (
               <Image source={{ uri: image }} style={styles.photo} />
@@ -510,20 +1050,22 @@ const Task = () => {
             )}
           </View>
           
-          {/* 验证结果区域 */}
+          {/* Verification result area */}
           {renderVerificationResult()}
           
-          {/* 拍照/选择照片按钮 */}
+          {/* Take photo/select photo buttons */}
           <View style={styles.photoButtons}>
             <TouchableOpacity 
               style={[
                 styles.photoButton, 
                 styles.cameraButton,
                 (!isNearAttraction && attraction.latitude !== null && attraction.longitude !== null) ? styles.disabledButton : null,
-                submitting && styles.disabledButton
+                submitting && styles.disabledButton,
+                taskCompleted && styles.disabledButton,
+                verificationResult?.isPending && styles.disabledButton
               ]}
               onPress={takePhoto}
-              disabled={taskCompleted || (!isNearAttraction && attraction.latitude !== null && attraction.longitude !== null) || submitting}
+              disabled={taskCompleted || (!isNearAttraction && attraction.latitude !== null && attraction.longitude !== null) || submitting || verificationResult?.isPending}
             >
               <Icon name="camera" size={24} color="white" />
               <Text style={styles.photoButtonText}>Camera</Text>
@@ -534,39 +1076,62 @@ const Task = () => {
                 styles.photoButton, 
                 styles.galleryButton,
                 (!isNearAttraction && attraction.latitude !== null && attraction.longitude !== null) ? styles.disabledButton : null,
-                submitting && styles.disabledButton
+                submitting && styles.disabledButton,
+                taskCompleted && styles.disabledButton,
+                verificationResult?.isPending && styles.disabledButton
               ]}
               onPress={pickImage}
-              disabled={taskCompleted || (!isNearAttraction && attraction.latitude !== null && attraction.longitude !== null) || submitting}
+              disabled={taskCompleted || (!isNearAttraction && attraction.latitude !== null && attraction.longitude !== null) || submitting || verificationResult?.isPending}
             >
               <Icon name="image" size={24} color="white" />
               <Text style={styles.photoButtonText}>Gallery</Text>
             </TouchableOpacity>
           </View>
           
-          {/* 提交按钮 */}
-          {image && !taskCompleted && (
+          {/* Reviewing hint */}
+          {verificationResult?.isPending && (
+            <View style={styles.pendingBanner}>
+              <Icon name="clock" size={24} color={theme.colors.warning} />
+              <Text style={styles.pendingBannerText}>Waiting for review result, please wait...</Text>
+            </View>
+          )}
+          
+          {/* Task completed hint */}
+          {taskCompleted && !image && (
+            <View style={styles.completedBanner}>
+              <Icon name="award" size={24} color={theme.colors.success} />
+              <Text style={styles.completedBannerText}>You have completed this task and cannot submit again</Text>
+            </View>
+          )}
+          
+          {/* Submit button - Display when there is a photo and task is not completed/under review/rejected */}
+          {image && !taskCompleted && (!verificationResult?.isPending || verificationResult?.isRejected) && (
             <TouchableOpacity 
-              style={[styles.submitButton, submitting && styles.disabledButton]}
+              style={[
+                styles.submitButton, 
+                submitting && styles.disabledButton,
+                verificationResult?.isRejected && styles.resubmitButton
+              ]}
               onPress={() => submitTaskForVerification(attraction.id, image, 'Terracotta-Warriors')}
-              disabled={submitting}
+              disabled={submitting || (verificationResult?.isPending && !verificationResult?.isRejected)}
             >
               {submitting ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="small" color="white" />
                   <Text style={styles.submitButtonText}>Verifying...</Text>
                 </View>
+              ) : verificationResult?.isRejected ? (
+                <Text style={styles.submitButtonText}>Resubmit Task</Text>
               ) : (
                 <Text style={styles.submitButtonText}>Submit Task</Text>
               )}
             </TouchableOpacity>
           )}
           
-          {taskCompleted && (
+          {taskCompleted && image && (
             <View style={styles.completedContainer}>
               <Icon name="heart" size={50} color={theme.colors.primary} />
               <Text style={styles.completedText}>Task Completed!</Text>
-              <Text style={styles.pointsText}>+{taskDetails.points} points</Text>
             </View>
           )}
         </ScrollView>
@@ -715,12 +1280,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     marginTop: hp(1),
   },
-  pointsText: {
-    fontSize: hp(2),
-    fontWeight: theme.fonts.bold,
-    color: theme.colors.primary,
-    marginTop: hp(0.5),
-  },
   locationStatus: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -801,5 +1360,144 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: theme.colors.textLight,
     marginTop: hp(1),
+  },
+  pendingCard: {
+    backgroundColor: '#FFF9E6',
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.warning,
+  },
+  verificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+  },
+  pendingText: {
+    fontSize: hp(1.7),
+    color: theme.colors.text,
+    marginVertical: 8,
+  },
+  pendingInfo: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: theme.radius.sm,
+  },
+  pendingInfoText: {
+    fontSize: hp(1.5),
+    color: theme.colors.textLight,
+    marginVertical: 3,
+  },
+  completedCard: {
+    backgroundColor: '#E6F7EC',
+    borderLeftWidth: 4,
+    borderLeftColor: '#27AE60',
+  },
+  completedMessage: {
+    fontSize: hp(1.7),
+    color: theme.colors.text,
+    marginVertical: 8,
+  },
+  completedDetails: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: theme.radius.sm,
+  },
+  completedHint: {
+    fontSize: hp(1.5),
+    color: theme.colors.textLight,
+    marginTop: 5,
+  },
+  completedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#E6F7EC',
+    borderRadius: theme.radius.sm,
+  },
+  completedBannerText: {
+    fontSize: hp(1.7),
+    color: theme.colors.text,
+    marginLeft: 10,
+  },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#FFF9E6',
+    borderRadius: theme.radius.sm,
+  },
+  pendingBannerText: {
+    fontSize: hp(1.7),
+    color: theme.colors.text,
+    marginLeft: 10,
+  },
+  pendingTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: hp(2),
+    padding: wp(3),
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: theme.radius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.primary,
+  },
+  pendingTipText: {
+    fontSize: hp(1.5),
+    color: theme.colors.primary,
+    marginLeft: wp(2),
+    fontWeight: '500',
+  },
+  rejectedCard: {
+    backgroundColor: '#FBEAEA',
+    borderLeftWidth: 4,
+    borderLeftColor: '#E74C3C',
+  },
+  rejectedMessage: {
+    fontSize: hp(1.7),
+    color: theme.colors.text,
+    marginVertical: 8,
+  },
+  rejectedInfo: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: theme.radius.sm,
+  },
+  rejectedInfoText: {
+    fontSize: hp(1.5),
+    color: theme.colors.text,
+    marginBottom: 3,
+  },
+  rejectedInfoItem: {
+    fontSize: hp(1.5),
+    color: theme.colors.textLight,
+    marginVertical: 3,
+  },
+  rejectedTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: hp(2),
+    padding: wp(3),
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: theme.radius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.primary,
+  },
+  rejectedTipText: {
+    fontSize: hp(1.5),
+    color: theme.colors.primary,
+    marginLeft: wp(2),
+    fontWeight: '500',
+  },
+  resubmitButton: {
+    backgroundColor: theme.colors.warning,
+  },
+  closeButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    padding: 8,
   },
 }); 

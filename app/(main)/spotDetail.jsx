@@ -74,7 +74,6 @@ const SpotDetail = () => {
         longitude: spot.longitude,
         taskTitle: spot.task_title || 'Photo Challenge',
         taskDescription: spot.task_description || 'Take a photo that showcases this attraction',
-        taskPoints: spot.task_points || 10,
         taskType: spot.task_type || 'photo'
       }
     });
@@ -164,7 +163,6 @@ const SpotDetail = () => {
         >
           <Icon name="award" size={hp(2.5)} color="white" />
           <Text style={styles.challengeButtonText}>Start Challenge</Text>
-          <Text style={styles.challengePoints}>+{spot.task_points || 10}pts</Text>
         </TouchableOpacity>
         
         {/* 描述标题 */}
@@ -401,16 +399,6 @@ const styles = StyleSheet.create({
     fontWeight: theme.fonts.semibold,
     fontSize: hp(1.8),
     marginLeft: wp(2),
-  },
-  challengePoints: {
-    color: 'white',
-    fontWeight: theme.fonts.bold,
-    fontSize: hp(1.8),
-    marginLeft: wp(2),
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: wp(2),
-    paddingVertical: hp(0.3),
-    borderRadius: theme.radius.sm,
   },
   sectionTitle: {
     fontSize: hp(2.2),

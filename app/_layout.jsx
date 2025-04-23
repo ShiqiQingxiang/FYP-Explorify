@@ -42,7 +42,17 @@ const MainLayout = () => {
         screenOptions={{
             headerShown: false
         }}
-    />
+    >
+      {/* 其他现有路由在此 */}
+      
+      {/* 管理员路由 */}
+      <Stack.Screen
+        name="(admin)/verifications"
+        options={{
+          headerShown: false,
+        }}
+      />
+    </Stack>
   )
 }
 
