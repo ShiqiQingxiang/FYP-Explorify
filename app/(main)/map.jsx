@@ -135,6 +135,18 @@ const Map = () => {
     }
   };
 
+  // Forbidden City location constant
+  const FORBIDDEN_CITY_LOCATION = {
+    coords: {
+      latitude: 39.9163,
+      longitude: 116.3972,
+      accuracy: 5
+    }
+  };
+
+  // Create separate simulation locations
+  const [simulatedLocation, setSimulatedLocation] = useState(TERRACOTTA_ARMY_LOCATION);
+
   // Fetch tourist spots from Supabase
   const fetchTouristSpots = async () => {
     try {
@@ -202,10 +214,10 @@ const Map = () => {
           return;
         }
 
-        // If user chooses to use simulated location, set to Terracotta Army
+        // If user chooses to use simulated location, set to the current simulatedLocation
         if (useSimulatedLocation) {
-          setLocation(TERRACOTTA_ARMY_LOCATION);
-          console.log("Using simulated location at Terracotta Army");
+          setLocation(simulatedLocation);
+          console.log(`Using simulated location at ${simulatedLocation.coords.latitude}, ${simulatedLocation.coords.longitude}`);
         } else {
           // Otherwise get real location
           let location = await Location.getCurrentPositionAsync({
@@ -225,7 +237,7 @@ const Map = () => {
         await fetchTouristSpots();
       }
     })();
-  }, [useSimulatedLocation]); // Add dependency, re-execute when simulated location state changes
+  }, [useSimulatedLocation, simulatedLocation]); // Add dependencies
 
   // Show or hide bottom info panel
   useEffect(() => {
@@ -334,12 +346,29 @@ const Map = () => {
 
   // Add functionality to set to Terracotta Army location
   const setToTerracottaArmy = () => {
+    setSimulatedLocation(TERRACOTTA_ARMY_LOCATION);
     setUseSimulatedLocation(true);
     // Automatically zoom to Terracotta Army location
     if (mapRef.current) {
       const region = {
         latitude: TERRACOTTA_ARMY_LOCATION.coords.latitude,
         longitude: TERRACOTTA_ARMY_LOCATION.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      mapRef.current.animateToRegion(region, 1000);
+    }
+  };
+
+  // Add functionality to set to Forbidden City location
+  const setToForbiddenCity = () => {
+    setSimulatedLocation(FORBIDDEN_CITY_LOCATION);
+    setUseSimulatedLocation(true);
+    // Automatically zoom to Forbidden City location
+    if (mapRef.current) {
+      const region = {
+        latitude: FORBIDDEN_CITY_LOCATION.coords.latitude,
+        longitude: FORBIDDEN_CITY_LOCATION.coords.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
@@ -423,6 +452,12 @@ const Map = () => {
           >
             <Icon name="user" size={hp(3)} color={useSimulatedLocation ? 'white' : theme.colors.primary} />
           </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.controlButton, useSimulatedLocation && styles.activeControlButton]} 
+            onPress={setToForbiddenCity}
+          >
+            <Icon name="home" size={hp(3)} color={useSimulatedLocation ? 'white' : theme.colors.primary} />
+          </TouchableOpacity>
         </View>
         
         {/* Search bar */}
@@ -504,8 +539,8 @@ const Map = () => {
                         description: selectedAttraction.description,
                         latitude: selectedAttraction.coordinate.latitude,
                         longitude: selectedAttraction.coordinate.longitude,
-                        userLatitude: useSimulatedLocation ? TERRACOTTA_ARMY_LOCATION.coords.latitude : (location ? location.coords.latitude : null),
-                        userLongitude: useSimulatedLocation ? TERRACOTTA_ARMY_LOCATION.coords.longitude : (location ? location.coords.longitude : null),
+                        userLatitude: useSimulatedLocation ? simulatedLocation.coords.latitude : (location ? location.coords.latitude : null),
+                        userLongitude: useSimulatedLocation ? simulatedLocation.coords.longitude : (location ? location.coords.longitude : null),
                         isSimulatedLocation: useSimulatedLocation,
                         taskTitle: selectedAttraction.taskTitle,
                         taskDescription: selectedAttraction.taskDescription,

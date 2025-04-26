@@ -533,7 +533,7 @@ const Task = () => {
         const completeResponse = await supabase
           .from('user_tasks')
           .update({ 
-            status: 'completed', 
+            completed: true, 
             verified: true,
             verification_status: 'auto_approved',
             points_earned: taskDetails.points 
@@ -566,7 +566,7 @@ const Task = () => {
       } catch (manualError) {
         console.error('转为人工审核时出错:', manualError);
         Alert.alert('Error', `验证过程中出错: ${error.message}`);
-        return false;
+      return false;
       }
     } finally {
       setIsLoading(false);
@@ -963,7 +963,7 @@ const Task = () => {
         <View style={[styles.verificationCard, styles.rejectedCard]}>
           <View style={styles.verificationHeader}>
             <Icon name="delete" size={30} color={theme.colors.error} />
-            <Text style={styles.verificationTitle}>审核未通过</Text>
+            <Text style={styles.verificationTitle}>Failed approval</Text>
             
             {/* 添加关闭按钮 */}
             <TouchableOpacity 

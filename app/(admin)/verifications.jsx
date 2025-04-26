@@ -222,36 +222,44 @@ const VerificationsScreen = () => {
         }
       </View>
       
-      {/* Redesigned review action section */}
+      {/* 完全重构的操作按钮区域 */}
       <View style={styles.reviewActionSection}>
         <Text style={styles.reviewActionTitle}>Choose an action:</Text>
         
         <View style={styles.actionButtons}>
-          {/* Approve button */}
-          <TouchableOpacity 
-            style={styles.bigActionButton}
-            onPress={() => handleReview(item.id, true)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.actionInner, styles.approveInner]}>
-              <Icon name="heart" size={24} color="white" />
-              <Text style={styles.bigButtonText}>Approve</Text>
-              <Text style={styles.buttonSubtext}>+{item.spot?.task_points || 10} points</Text>
+          {/* 批准按钮 - 使用新的结构和固定高度 */}
+          <View style={[styles.actionButtonWrapper, {height: hp(16)}]}>
+            <TouchableOpacity 
+              onPress={() => handleReview(item.id, true)}
+              activeOpacity={0.7}
+              style={[styles.actionButton, {height: hp(10)}]}
+            >
+              <View style={[styles.actionInner, styles.approveInner]}>
+                <Icon name="heart" size={24} color="white" />
+                <Text style={styles.buttonMainText}>Approve</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={[styles.buttonSubTextContainer, styles.approveSubTextContainer, {height: hp(6)}]}>
+              <Text style={styles.buttonSubText}>+{item.spot?.task_points || 10} points</Text>
             </View>
-          </TouchableOpacity>
+          </View>
           
-          {/* Reject button */}
-          <TouchableOpacity 
-            style={styles.bigActionButton}
-            onPress={() => handleReview(item.id, false)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.actionInner, styles.rejectInner]}>
-              <Icon name="delete" size={24} color="white" />
-              <Text style={styles.bigButtonText}>Reject</Text>
-              <Text style={styles.buttonSubtext}>Does not meet requirements</Text>
+          {/* 拒绝按钮 - 使用新的结构和固定高度 */}
+          <View style={[styles.actionButtonWrapper, {height: hp(16)}]}>
+            <TouchableOpacity 
+              onPress={() => handleReview(item.id, false)}
+              activeOpacity={0.7}
+              style={[styles.actionButton, {height: hp(10)}]}
+            >
+              <View style={[styles.actionInner, styles.rejectInner]}>
+                <Icon name="delete" size={24} color="white" />
+                <Text style={styles.buttonMainText}>Reject</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={[styles.buttonSubTextContainer, styles.rejectSubTextContainer, {height: hp(6)}]}>
+              <Text style={styles.buttonSubText}>not meet requirements</Text>
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
       </View>
     </View>
@@ -407,48 +415,62 @@ const styles = StyleSheet.create({
     gap: wp(3),
     marginTop: hp(2),
   },
-  actionButton: {
+  actionButtonWrapper: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: hp(1.8),
-    borderRadius: theme.radius.md,
-    gap: wp(2),
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    elevation: 4,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
-  approveButton: {
-    backgroundColor: '#27AE60', // More vibrant green
+  actionButton: {
+    width: '100%',
   },
-  rejectButton: {
-    backgroundColor: '#E74C3C', // More vibrant red
+  actionInner: {
+    padding: hp(2),
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: hp(6),
   },
-  buttonText: {
-    fontSize: hp(1.8),
+  approveInner: {
+    backgroundColor: '#27AE60',
+  },
+  rejectInner: {
+    backgroundColor: '#E74C3C',
+  },
+  buttonMainText: {
+    fontSize: hp(2),
     fontWeight: '700',
     color: 'white',
+    marginTop: hp(1),
   },
-  actionPrompt: {
-    flexDirection: 'row',
+  buttonSubTextContainer: {
+    width: '100%',
+    padding: hp(1.5),
     alignItems: 'center',
-    marginBottom: hp(1),
-    paddingHorizontal: wp(2),
+    justifyContent: 'center',
+    height: hp(6),
+    minHeight: hp(6),
   },
-  promptText: {
-    fontSize: hp(1.6),
-    fontWeight: '600',
-    color: theme.colors.primary,
-    marginLeft: wp(2),
+  approveSubTextContainer: {
+    backgroundColor: '#27AE60',
+    opacity: 0.9,
   },
-  promptIcon: {
-    transform: [{ rotate: '90deg' }]
+  rejectSubTextContainer: {
+    backgroundColor: '#E74C3C',
+    opacity: 0.9,
+  },
+  buttonSubText: {
+    fontSize: hp(1.5),
+    color: 'white',
+    textAlign: 'center',
   },
   reviewActionSection: {
     marginTop: hp(2),
@@ -468,26 +490,16 @@ const styles = StyleSheet.create({
     flex: 1,
     margin: wp(1),
     borderRadius: theme.radius.lg,
-    overflow: 'hidden',
-    elevation: 6,
+    overflow: 'visible',
+    elevation: 4,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
-      height: 3,
+      height: 2,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-  },
-  actionInner: {
-    padding: hp(2),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  approveInner: {
-    backgroundColor: '#27AE60',
-  },
-  rejectInner: {
-    backgroundColor: '#E74C3C',
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    marginBottom: hp(1),
   },
   bigButtonText: {
     fontSize: hp(2),
@@ -498,7 +510,9 @@ const styles = StyleSheet.create({
   buttonSubtext: {
     fontSize: hp(1.4),
     color: 'rgba(255,255,255,0.9)',
-    marginTop: hp(0.2),
+    marginTop: hp(0.5),
+    marginBottom: hp(1.5),
+    position: 'relative',
   },
 });
 

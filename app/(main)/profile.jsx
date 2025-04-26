@@ -257,24 +257,24 @@ const UserHeader = ({user, router, handleLogout}) => {
                 <Text style={styles.infoText}>
                   {user && user.email}
                 </Text>
-              </View>
-              {
-                user && user.phoneNumber && (
+            </View>
+            {
+              user && user.phoneNumber && (
                   <View style={styles.info}>
                     <Icon name="call" size={20} color={theme.colors.textLight} />
                     <Text style={styles.infoText}>
                       {user && user.phoneNumber}
                     </Text>
                   </View>
-                )
-              }
+              )
+            }
     
 
-              {
-                user && user.bio && (
+            {
+              user && user.bio && (
                   <Text style={[styles.infoText, {marginLeft: wp(10)}]}>{user.bio}</Text>
-                )
-              }
+              )
+            }
             </View>
           </View>
         </View>
