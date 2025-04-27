@@ -7,7 +7,8 @@ export const getUserImageSrc = imagePath => {
     if(imagePath) {
         return getSupabaseFileUrl(imagePath);
     }else{
-        return require('../assets/images/user.png');
+        // 使用网络默认头像
+        return { uri: 'https://ui-avatars.com/api/?name=User&background=random' };
     }
 }
 

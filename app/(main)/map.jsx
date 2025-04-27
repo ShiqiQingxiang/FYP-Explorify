@@ -114,8 +114,8 @@ const Map = () => {
   const [region, setRegion] = useState({
     latitude: 39.9163, // Default position (Forbidden City)
     longitude: 116.3972,
-    latitudeDelta: 40, // Initial zoom level to show global attractions
-    longitudeDelta: 40,
+    latitudeDelta: 0.1, // 减小初始缩放级别
+    longitudeDelta: 0.1,
   });
   const router = useRouter();
   const mapRef = useRef(null);
@@ -237,6 +237,16 @@ const Map = () => {
         await fetchTouristSpots();
       }
     })();
+
+    // 组件卸载时的清理函数
+    return () => {
+      if (mapRef.current) {
+        console.log("清理地图组件资源");
+        // 重置所有状态
+        setSelectedAttraction(null);
+        setAttractions([]);
+      }
+    };
   }, [useSimulatedLocation, simulatedLocation]); // Add dependencies
 
   // Show or hide bottom info panel
@@ -268,7 +278,7 @@ const Map = () => {
         longitudeDelta: 0.01,
       };
       
-      mapRef.current.animateToRegion(currentRegion, 1000);
+      safeAnimateToRegion(currentRegion, 1000);
     }
   };
 
@@ -320,7 +330,7 @@ const Map = () => {
         longitudeDelta: 0.01,
       };
       
-      mapRef.current.animateToRegion(region, 1000);
+      safeAnimateToRegion(region, 1000);
       setSelectedAttraction(attraction);
     }
   };
@@ -356,7 +366,7 @@ const Map = () => {
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
-      mapRef.current.animateToRegion(region, 1000);
+      safeAnimateToRegion(region, 1000);
     }
   };
 
@@ -372,7 +382,7 @@ const Map = () => {
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
-      mapRef.current.animateToRegion(region, 1000);
+      safeAnimateToRegion(region, 1000);
     }
   };
 
@@ -391,6 +401,35 @@ const Map = () => {
     return colors[category] || '#FF5733'; // If no matching category, use orange-red
   };
 
+  // 添加地图错误处理函数
+  const handleMapError = (error) => {
+    console.error("地图加载错误:", error);
+    Alert.alert(
+      "地图加载错误",
+      "地图加载失败，请确保您已连接网络并允许位置权限。",
+      [{ text: "确定" }]
+    );
+  };
+
+  // 添加安全的区域动画函数
+  const safeAnimateToRegion = (targetRegion, duration = 1000) => {
+    try {
+      if (mapRef.current && targetRegion) {
+        // 确保坐标在有效范围内
+        const validRegion = {
+          ...targetRegion,
+          latitude: Math.max(-85, Math.min(85, targetRegion.latitude)),
+          longitude: Math.max(-180, Math.min(180, targetRegion.longitude)),
+          latitudeDelta: Math.max(0.01, Math.min(50, targetRegion.latitudeDelta || 0.01)),
+          longitudeDelta: Math.max(0.01, Math.min(50, targetRegion.longitudeDelta || 0.01)),
+        };
+        mapRef.current.animateToRegion(validRegion, duration);
+      }
+    } catch (error) {
+      console.error("地图动画错误:", error);
+    }
+  };
+
   return (
     <View style={styles.mainContainer}>
       <StatusBar translucent backgroundColor="transparent" />
@@ -407,6 +446,7 @@ const Map = () => {
           showsCompass={true}
           rotateEnabled={true}
           zoomEnabled={true}
+          onError={handleMapError}
           onPress={() => {
             // Click on map to close details
             setSelectedAttraction(null);
@@ -423,21 +463,8 @@ const Map = () => {
               title={attraction.title}
               description={attraction.description}
               onPress={() => handleAttractionPress(attraction)}
-            >
-              {/* New simple marker */}
-              <View style={styles.customMarker}>
-                <View style={[
-                  styles.markerPin,
-                  { backgroundColor: getMarkerStyle(attraction.category) }
-                ]}>
-                  <Icon 
-                    name="location" 
-                    size={hp(1.8)} 
-                    color="white" 
-                  />
-                </View>
-              </View>
-            </Marker>
+              pinColor={getMarkerStyle(attraction.category)}
+            />
           ))}
         </MapView>
 

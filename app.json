@@ -8,12 +8,15 @@
     "scheme": "myapp",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
-      "**/*"
+      "**/*",
+      "!**/assets/images/user.png",
+      "!**/assets/images/welcome1.png",
+      "!**/assets/images/defaultUser.png"
     ],
     "ios": {
       "supportsTablet": true
@@ -26,9 +29,15 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.anonymous.Explorify"
+      "package": "com.anonymous.Explorify",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBEb-Aw9sqxltsrcCjRg-SDue7cS4tO7Vk"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
@@ -48,6 +57,17 @@
       },
       "api": {
         "gatewayUrl": "https://72nxywevyi.execute-api.eu-west-1.amazonaws.com/prod"
+      },
+      "eas": {
+        "projectId": "0c8b583e-fe1a-4516-a4ae-bb2663077727"
+      }
+    },
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-pell-rich-editor"
+        ],
+        "listUnknownPackages": false
       }
     }
   }

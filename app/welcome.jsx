@@ -15,7 +15,7 @@ const Welcome = () => {
         <StatusBar style="dark" />
         <View style={styles.container}>
           {/* welcome image */}
-          <Image style={styles.welcomeImage} resizeModel="contain" source={require('../assets/images/welcome1.png')} />
+          <Image style={styles.welcomeImage} resizeModel="contain" source={require('../assets/images/welcome.png')} />
           
           {/* title */}
           <View style={{gap: 20}}>
